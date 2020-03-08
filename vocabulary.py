@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import collections
 import enum
 
@@ -6,11 +8,14 @@ class SpecialToken(enum.Enum):
     START="<start>"
     END="<end>"
     PAD="<pad>"
+    UNK="<unk>"
 
 
 class Vocabulary(object):
 
-    def __init__(self):
+    def __init__(self, min_freq=1):
+        self.min_freq = min_freq
+
         self._word2idx = {}
         self._idx2word = {}
 
@@ -33,8 +38,8 @@ class Vocabulary(object):
         _word = word.lower()
         
         self._counter.update({_word: 1})
-        if not _word in self._word2idx:
-            new_idx = len(self._word2idx) + 1
+        if self._counter[word] > self.min_freq and not _word in self._word2idx:
+            new_idx = len(self._word2idx)
             self._word2idx[_word] = new_idx
             self._idx2word[new_idx] = _word
             return True
@@ -64,16 +69,29 @@ class Vocabulary(object):
         """
         return self._counter.most_common()[:-n-1:-1] 
 
-def build_vocabulary_from_tokenized_captions_flickr(file_path):
-    vocab = Vocabulary()
-    
+    def encode(self, sequence=[]):
+        """
+        Given a tokenized sequence, returns a vector with the corresponding index of each token.
+        """
+        return [self.get_index(word) for word in sequence]
+
+    def decode(self, sequence=[]):
+        """
+        Given an encoded sequence (i.e., each element represents the index of each token), returns
+        the tokenized sequence. 
+        """
+        return [self.get_word(idx) for idx in sequence]
+
+
+def build_vocabulary_from_tokenized_captions_flickr(filename, min_freq=1):
+    vocab = Vocabulary(min_freq)
+
     # Processing file with tokenized captions.
-    with open(file_path) as f:
+    with open(filename) as f:
         for line in f.readlines():
-            tokens = line.split()[1:]
-            for token in tokens:
+            for token in line.split()[1:]:
                 vocab.add_word(token)
-    
+
     # Adding special tokens
     for special_token in SpecialToken:
         vocab.add_word(special_token.value)
