@@ -1,26 +1,42 @@
 #!/usr/bin/env python
 
+import enum
 import os
 
-import imageio
+import imageio  # TODO(joel): Replace with PIL
 from torch.utils.data import Dataset
 
 from vocabulary import SpecialToken
 
 
-class FlickrDataset(Dataset):
+class Split(enum.Enum):
+    TRAIN = 0
+    TEST = 1
+    EVAL = 2
 
-    def __init__(self, data_root, vocabulary, transform=None):
-        super(FlickrDataset, self).__init__()
 
-        self.data_root = data_root
-        self.vocab = vocabulary
-        self.transform = transform
+class Flickr8kDataset(Dataset):
+
+    def __init__(self, img_root, ann_root, split=Split.TRAIN, transform=None, target_transform=None):
+        super(Flickr8kDataset, self).__init__()
+
+        self._img_root = img_root
+        self._ann_root = ann_root
+        self._split = split
+        self._transform = transform
+        self._target_transform = target_transform
+
+        if self._split == Split.TRAIN:
+            ann_file = '...'
+        elif self._split == Split.TEST:
+            ann_file = '...'
+        elif self._split == Split.EVAL:
+            ann_file = '...'
+        self._ann_file = os.path.join(self._ann_root, ann_file)
 
         # Proccessing tokenized captions.
         self.samples = []
-        flickr_tokenized_file = os.path.join(data_root, "Flickr8k_Text", "Flickr8k.token.txt")
-        with open(flickr_tokenized_file) as f:
+        with open(self._ann_file) as f:
             for line in f.readlines():
                 line = line.split()
                 image_id, tokens = line[0], line[1:]
@@ -29,22 +45,17 @@ class FlickrDataset(Dataset):
     def __len__(self):
         return len(self.samples)
 
-    def _get_image_path(self, image_id):
-        image_name = image_id[:-2]
-        return os.path.join(self.data_root, "Flickr8k_Dataset", image_name)
-
     def __getitem__(self, key):
         image_id, tokens = self.samples[key]
         
         # Processing image
-        image = imageio.imread(self._get_image_path(image_id))
+        image = imageio.imread(os.path.join(self._img_root, image_id))
         if self.transform is not None:
             image = self.transform(image)
 
         # Processing caption.
-        caption = []
-        caption.append(self.vocab.get_index(SpecialToken.START.value))
-        caption.extend([self.vocab.get_index(token) for token in tokens])
-        caption.append(self.vocab.get_index(SpecialToken.END.value))
+        caption = tokens
+        if self.target_transform is not None:
+            caption = self.target_transform(tokens)
 
         return image, caption

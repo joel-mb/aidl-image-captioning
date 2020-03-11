@@ -14,7 +14,7 @@ class SpecialToken(enum.Enum):
 class Vocabulary(object):
 
     def __init__(self, min_freq=1):
-        self.min_freq = min_freq
+        self._min_freq = min_freq
 
         self._word2idx = {}
         self._idx2word = {}
@@ -38,7 +38,7 @@ class Vocabulary(object):
         _word = word.lower()
         
         self._counter.update({_word: 1})
-        if self._counter[word] > self.min_freq and not _word in self._word2idx:
+        if self._counter[word] > self._min_freq and not _word in self._word2idx:
             new_idx = len(self._word2idx)
             self._word2idx[_word] = new_idx
             self._idx2word[new_idx] = _word
@@ -69,25 +69,17 @@ class Vocabulary(object):
         """
         return self._counter.most_common()[:-n-1:-1] 
 
-    def encode(self, sequence=[]):
-        """
-        Given a tokenized sequence, returns a vector with the corresponding index of each token.
-        """
-        return [self.get_index(word) for word in sequence]
+def build_flickr8k_vocabulary(ann_file, min_freq=1):
+    """
+    Builds flickr8k vocabulary.
 
-    def decode(self, sequence=[]):
-        """
-        Given an encoded sequence (i.e., each element represents the index of each token), returns
-        the tokenized sequence. 
-        """
-        return [self.get_word(idx) for idx in sequence]
-
-
-def build_vocabulary_from_tokenized_captions_flickr(filename, min_freq=1):
+        :param ann_file: Annotation file with the tokenized captions.
+        :param min_freq: Word minimum frequency to be added to the vocabulary.
+    """
     vocab = Vocabulary(min_freq)
 
     # Processing file with tokenized captions.
-    with open(filename) as f:
+    with open(ann_file) as f:
         for line in f.readlines():
             for token in line.split()[1:]:
                 vocab.add_word(token)
