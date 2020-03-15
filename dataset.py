@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 
-import enum
 import os
 
-import numpy as np
-from PIL import Image
-
+import torch
 from torch.utils.data import Dataset
+from torch.nn.utils.rnn import pad_sequence
+from PIL import Image
 
 from util import Flickr8kFolder
 
@@ -65,3 +64,17 @@ class Flickr8kDataset(Dataset):
             caption = self._target_transform(tokens)
 
         return image, caption
+
+def flickr_collate_fn(batch):
+    #print('[flickr_collate] batch size: {}, batch type: {}'.format(len(batch), type(batch)))
+    imgs = [sample[0] for sample in batch]
+    captions = [sample[1] for sample in batch]
+    lengths =  [len(caption) for caption in captions]
+
+    #for caption in captions:
+    #    print('[flickr_collate] caption: {}'.format(caption))
+    captions = pad_sequence(captions, batch_first=True, padding_value=2)
+    #print('[flickr_collate] captions shape: {}'.format(captions.shape))
+    #print('[flickr_collate] legths: {}'.format(lengths))
+    
+    return torch.stack(imgs), captions, lengths

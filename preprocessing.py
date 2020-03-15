@@ -18,8 +18,7 @@ class Word2Idx(object):
             for token in tokenized_sequence
         ])
         result.append(self._vocab.get_index(SpecialToken.END.value))
-        return result
-        #return torch.Tensor(result)
+        return torch.LongTensor(result)
 
 
 class IdxToWord(object):
@@ -29,7 +28,6 @@ class IdxToWord(object):
     def __call__(self, idx_sequence):
         result = [self._vocab.get_word(idx) for idx in idx_sequence]
         return result
-        #return torch.Tensor(result)
 
 
 class NormalizeImageNet(transforms.Normalize):

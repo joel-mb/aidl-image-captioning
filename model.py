@@ -4,26 +4,32 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from vocabulary import Vocabulary, SpecialToken
 
 
 class Encoder(nn.Module):
-    
     def __init__(self, encoded_size):
         super(Encoder, self).__init__()
 
         self.encoded_size = encoded_size
 
-        self.encoder_model = models.resnet101(pretrained=True)
-        self.encoder_model.fc = nn.Linear(2048, self.encoded_size)
+        self.model = models.resnet101(pretrained=True)
+        self.model.eval()  # Check (always eval)
+        for parameter in self.model.parameters():
+            parameter.requires_grad = False
+
+        # Parameters of newly constructed modules have requires_grad=True by
+        # default
+        num_ftrs = self.model.fc.in_features
+        self.model.fc = nn.Linear(num_ftrs, self.encoded_size)
 
     def forward(self, x):
-        return self.encoder_model(x)
+        return self.model(x)
 
 
 class Decoder(nn.Module):
-
     def __init__(self, embed_size, vocab_size, hidden_size):
         super(Decoder, self).__init__()
 
@@ -36,67 +42,134 @@ class Decoder(nn.Module):
     def init_hidden(self):
         pass
 
+    #TODO: # Random entre correcta y generada en el timestep anterior.
     def forward(self, features, captions, lengths):
         """
-        In training mode we use teacher forcing as we know the targets. In prediction
-        time the model uses embedding of the previously predicted word and the last
-        hidden state.
-        # Random entre correcta y generada en el timestep anterior.
-        """
-        # Caption shape: [batch size, sequence_length, vocab_size]
+        Forward decoder.
 
-        # 1. Word index to embedding
-        # Entrar feautures como contexto.
+            :param features: shape [batch_size, hidden_size==encoder_size]
+            :param captions: shape [batch_size, max_length]
+            :param lengths: list with length of each caption.
+
+        In training mode we use teacher forcing as we know the targets.
+        """        
+        # ----------
+        # Embeddings
+        # ----------
+        # Word indices to embeddings representation. Captions shape after
+        # embeddings:
+        #    captions -- [batch_size, max_length, embed_size]
         captions = self._embedding(captions)
+        
+        # ----
+        # LSTM
+        # ----
+        # In training mode we use teacher forcing as we know the targets.
+        #
+        # Unsqueeze first dimension features to apply num_layers = 1.
+        # Shape after unsqueeze:
+        #    features -- [num_layers(1), batch_size, hidden_size].
+        # Shape after lstm:
+        #    output -- [batch_size, max_length, hidden_size]
+        #    state(h) -- [num_layers, batch_size, hidden_size]
+        #    state(c) -- [num_layers, batch_size, hidden_size]
+        features = features.unsqueeze(0)  # Adds num_layer dimension.
 
-        # 2. Concatenate captions and fetures, as the features is the first input to our rnn.
-        # x = torch.cat(features, captions)
+        # FIXME: Sort captions by length to avoid enforce_sorted=Fasle
+        packed = pack_padded_sequence(captions, lengths, batch_first=True, enforce_sorted=False)
+        # FIXME: How to init c? h=features, c=?
+        hidden, state = self._lstm(packed, (torch.zeros(features.shape).to('cuda'), features))
+        output, _ = pad_packed_sequence(hidden, batch_first=True)
 
-        # 3. LSTM
-        #pack_padded_sequence
-        hidden, state = self._lstm(captions, features)
-        #pad_packed_sequence
+        # -------------------
+        # Output linear layer
+        # -------------------
+        # Shape after linear layer:
+        #    [batch_size, max_length, vocab_size]
+        output = self._linear(output)
 
-        # 4. out
-        out = self._linear(hidden)
-        out = F.log_softmax(out, dim=-1)
-        return out, state
+        # -------
+        # Softmax
+        # -------
+        # Shape after softmax
+        #    [batch_size, max_length, vocab_size]
+        #output = F.log_softmax(output, dim=2)
+
+        return output, state
 
     def _forward_step(self, x, state=None):
+        """
+        Single forward step.
+        
+            :param x: input. Shape: [1] (word index)
+            :param state: tuple (h, c).
+                Shape: [num_layers(1), batch_size(1), hidden_size]
+        """
+        # ---------
+        # Embedding
+        # ---------
+        # Shape after embedding:
+        #    [batch_size(1), max_lenght(1), embed_size]
         x = self._embedding(x)
-        x = x.unsqueeze(0)
-        #state = state.unsqueeze(0)
-        #print(state.dim())
-        #print(state.shape)
-        hidden, state = self._lstm(x, state)  # Deberia llamar como a la lsmt cell, para no tener que poner el unsqueeze
-        out = self._linear(hidden)
-        return F.log_softmax(out, dim=-1), state
+        x = x.unsqueeze(1)  # Unsqueeze to add max_length(1) dimension.
+
+        # ----------------
+        # LSTM single step
+        # ----------------
+        # Shape after lstm:
+        #    hidden -- [batch_size(1), max_length(1), hidden_size]
+        #    state -- [num_layers(1), batch_size(1), hidden_size]
+        hidden, state = self._lstm(x, state)
+
+        # -------------------
+        # Output linear layer
+        # -------------------
+        # Shape after linear output:
+        #    output -- [batch_size(1), max_length(1), vocab_size]
+        output = self._linear(hidden)
+
+        # -------
+        # Softmax
+        # -------
+        # Shape after softmax:
+        #    output -- [batch_size(1), max_length(1), vocab_size]
+        output = F.log_softmax(output, dim=2)
+
+        return output, state
 
     def sample(self, features, max_len):
+        """
+        Predicts a caption.
+
+            :param features: shape [batch_size(1), hidden_size].
+            :param max_len: maximum length of the predicted caption.
+
+        In prediction time the model uses embedding of the previously predicted
+        word and the last hidden state.
+        """
         output = []
 
         i, pred = 0, None
         while i <= max_len and pred != SpecialToken.END.value:
             if i == 0:  # First iteration.
-                #start = [0, ] * self._vocab_size
-                #start[0] = 1
-                start=[0]
-                start = torch.tensor(start, dtype=torch.int64, device='cuda')
-                print(start.shape)
-                features = features.unsqueeze(0)
-                h, c = features, torch.zeros(features.shape)
+                start = torch.tensor([0], dtype=torch.int64, device='cuda')
+
+                features = features.unsqueeze(0)  # Add num_layers dimension
+                h, c = torch.zeros(features.shape), features
                 h = h.to('cuda')
                 c = c.to('cuda')
+
                 out, state = self._forward_step(start, (h, c))
 
             else:
                 out, state = self._forward_step(pred, state)
 
-            _, pred = out[0].max(1)
+            _, pred = out.max(2)
+            pred = pred.squeeze(1)
             output.append(pred)
             i += 1
 
-        output = torch.stack(output, 1).cpu().numpy().tolist()
         print(output)
-
+        output = torch.stack(output, 1).cpu().numpy().tolist()
+ 
         return output[0], state
