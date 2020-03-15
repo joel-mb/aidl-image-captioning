@@ -149,8 +149,8 @@ class Decoder(nn.Module):
         """
         output = []
 
-        i, pred = 0, None
-        while i <= max_len and pred != SpecialToken.END.value:
+        i, index_pred = 0, None
+        while i <= max_len and index_pred != 1: # END
             if i == 0:  # First iteration.
                 start = torch.tensor([0], dtype=torch.int64, device='cuda')
 
@@ -165,11 +165,12 @@ class Decoder(nn.Module):
                 out, state = self._forward_step(pred, state)
 
             _, pred = out.max(2)
+            index_pred = pred[0][0]
             pred = pred.squeeze(1)
             output.append(pred)
             i += 1
 
-        print(output)
+        #print(output)
         output = torch.stack(output, 1).cpu().numpy().tolist()
  
         return output[0], state

@@ -63,18 +63,24 @@ class Flickr8kDataset(Dataset):
         if self._target_transform is not None:
             caption = self._target_transform(tokens)
 
-        return image, caption
+        return image_id, image, caption
 
 def flickr_collate_fn(batch):
     #print('[flickr_collate] batch size: {}, batch type: {}'.format(len(batch), type(batch)))
-    imgs = [sample[0] for sample in batch]
-    captions = [sample[1] for sample in batch]
-    lengths =  [len(caption) for caption in captions]
+    imgs_id = [sample[0] for sample in batch]
+    imgs = [sample[1] for sample in batch]
+    captions_train = [sample[2][:-1] for sample in batch] # Quitramos end
+    captions_loss = [sample[2][1:] for sample in batch]  # QUitamos start
+    lengths =  [len(caption) for caption in captions_train]
+
+    #print('Captions train: {}'.format(captions_train[0]))
+    #print('Captions loss: {}'.format(captions_loss[0]))
 
     #for caption in captions:
     #    print('[flickr_collate] caption: {}'.format(caption))
-    captions = pad_sequence(captions, batch_first=True, padding_value=2)
+    captions_train = pad_sequence(captions_train, batch_first=True, padding_value=2)
+    captions_loss = pad_sequence(captions_loss, batch_first=True, padding_value=2)
     #print('[flickr_collate] captions shape: {}'.format(captions.shape))
     #print('[flickr_collate] legths: {}'.format(lengths))
     
-    return torch.stack(imgs), captions, lengths
+    return imgs_id, torch.stack(imgs), captions_train, captions_loss, lengths

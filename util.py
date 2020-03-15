@@ -34,6 +34,6 @@ class Flickr8kFolder(object):
     def eval_imgs_file(self):
         return os.path.join(self.text_root, 'Flickr_8k.devImages.txt')
 
-def show_image_captioning(self, image_path, caption):
+def show_image_captioning(self, image):
     # Show image and caption. This can be used for inference when sampling.
     pass
