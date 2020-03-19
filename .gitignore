@@ -4,3 +4,4 @@ data/flickr8k/*
 .vscode
 __pycache__
 venv
+runs
