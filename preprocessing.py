@@ -26,11 +26,11 @@ class IdxToWord(object):
         self._vocab = vocabulary
 
     def __call__(self, idx_sequence):
-        result = [self._vocab.get_word(idx) for idx in idx_sequence]
+        result = []
+
+        special_tokens = [token.value for token in SpecialToken]
+        for idx in idx_sequence:
+            word = self._vocab.get_word(idx)
+            if word not in special_tokens or word == SpecialToken.UNK.value:
+                result.append(word)
         return result
-
-
-class NormalizeImageNet(transforms.Normalize):
-    def __init__(self):
-        super(NormalizeImageNet, self).__init__(mean=(0.485, 0.456, 0.406),
-                                                std=(0.229, 0.224, 0.225))
