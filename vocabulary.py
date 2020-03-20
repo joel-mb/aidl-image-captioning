@@ -30,6 +30,12 @@ class Vocabulary(object):
     def __contains__(self, word):
         return word in self._word2idx
 
+    def get_words(self):
+        """
+        Returns the list of vocabulary words sorted by word index.
+        """
+        return [word for (key, word) in sorted(self._idx2word.items(), key=lambda item: item[0])]
+
     def add_word(self, word):
         """
         Adds a new word to the vocabulary and updates the internal counter.

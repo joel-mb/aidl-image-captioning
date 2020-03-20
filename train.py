@@ -149,7 +149,7 @@ class Train(object):
             predicted_cap = self.idx2word_fn(predicted_cap.tolist())
             target_cap = self.idx2word_fn(target_cap.tolist())
 
-            bleu = bleu_score([predicted_cap], [target_cap])
+            bleu = bleu_score([predicted_cap], [[target_cap]])
             total_bleu += bleu
         return total_bleu / self.hparams['batch_size']
 
@@ -244,13 +244,18 @@ class Train(object):
                 #writer.add_graph(self.encoder,)  # TODO(joel): Need input model?
                 #writer.add_graph(self.decoder, )   # TODO(joel): Need input model?
 
+            # Writing scalars.
             writer.add_scalar('Loss/train', train_loss, epoch)
             writer.add_scalar('Loss/test', eval_loss, epoch)
-            writer.add_scalar('Accuracy/train', train_loss, epoch)
-            writer.add_scalar('Accuracy/test', eval_loss, epoch)
+            writer.add_scalar('Accuracy/train', train_acc, epoch)
+            writer.add_scalar('Accuracy/test', eval_acc, epoch)
 
             logging.info('Epoch {}: [TRAIN] Loss: {} | [EVAL] Loss: {}'.format(epoch, train_loss, eval_loss))
             logging.info('Epoch {}: [TRAIN] Acc: {} | [EVAL] Acc: {}'.format(epoch, train_acc, eval_acc))
+
+        # Writing embeddings.
+        logging.debug('Adding embeddings...')
+        writer.add_embedding(self.decoder._embedding.weight, metadata=self.vocab.get_words(), global_step=0)
 
         # Closing tensorboard writer
         writer.close()
