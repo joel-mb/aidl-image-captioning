@@ -119,9 +119,11 @@ class Train(object):
         logging.info('Builing model...')
         self.encoder = model.Encoder(self.hparams['hidden_size'])
         self.decoder = model.Decoder(self.hparams['embedding_size'], len(self.vocab), self.hparams['hidden_size'])
+        self.model = model.ImageCaptioningModel(self.encoder, self.decoder)
 
         self.encoder.to(self.hparams['device'])
         self.decoder.to(self.hparams['device'])
+        self.model.to(self.hparams['device'])
 
         # ------------------
         # Loss and optimizer
@@ -177,8 +179,9 @@ class Train(object):
             self.optimizer.zero_grad()
 
             # 1. Forward the data through the network.
-            features = self.encoder(img)                           # [batch_size, hidden_size]
-            out, _ = self.decoder(features, train_caps, lengths)
+            #features = self.encoder(img)                           # [batch_size, hidden_size]
+            #out, _ = self.decoder(features, train_caps, lengths)
+            out, _ = self.model(img, train_caps, lengths)
 
             # 2. Compute loss.
             loss = self.criterion(out.view(-1, len(self.vocab)), loss_caps.view(-1))
@@ -212,8 +215,9 @@ class Train(object):
             loss_caps = loss_caps.to(self.hparams['device'])       # [batch_size, max_length]
 
             # 1. Forward the data through the network.
-            features = self.encoder(img)                           # [batch_size, hidden_size]
-            out, _ = self.decoder(features, train_caps, lengths)
+            #features = self.encoder(img)                           # [batch_size, hidden_size]
+            #out, _ = self.decoder(features, train_caps, lengths)
+            out, _ = self.model(img, train_caps, lengths)
 
             # 2. Compute loss.
             loss = self.criterion(out.view(-1, len(self.vocab)), loss_caps.view(-1))
@@ -230,9 +234,7 @@ class Train(object):
 
         """
         # Starting tensorboard writer.
-        writer = SummaryWriter()
-        #writer.add_hparams()
-        #writer.add_graph(self.encoder)
+        self.writer = SummaryWriter()  # TODO(joel): Add this to ctor?
 
         for epoch in range(self.hparams['num_epochs']):
             
@@ -240,30 +242,46 @@ class Train(object):
             eval_loss, eval_acc = self.validate_epoch()
 
             if epoch == 0:
-                pass
-                #writer.add_graph(self.encoder,)  # TODO(joel): Need input model?
-                #writer.add_graph(self.decoder, )   # TODO(joel): Need input model?
+                dummy_imgs = torch.randn(32, 3, 224, 224, dtype=torch.float32).to('cuda')
+                dummy_caps = torch.randint(low=0, high=8921, size=(32, 25), dtype=torch.int64).to('cuda')
+                dummy_lengths = torch.randint(low=1, high=25, size=(32, ), dtype=torch.int64).to('cuda')
+
+                self.writer.add_graph(self.model, (dummy_imgs, dummy_caps, dummy_lengths))
 
             # Writing scalars.
-            writer.add_scalar('Loss/train', train_loss, epoch)
-            writer.add_scalar('Loss/test', eval_loss, epoch)
-            writer.add_scalar('Accuracy/train', train_acc, epoch)
-            writer.add_scalar('Accuracy/test', eval_acc, epoch)
+            self.writer.add_scalar('Loss/train', train_loss, epoch)
+            self.writer.add_scalar('Loss/test', eval_loss, epoch)
+            self.writer.add_scalar('Accuracy/train', train_acc, epoch)
+            self.writer.add_scalar('Accuracy/test', eval_acc, epoch)
 
-            logging.info('Epoch {}: [TRAIN] Loss: {} | [EVAL] Loss: {}'.format(epoch, train_loss, eval_loss))
-            logging.info('Epoch {}: [TRAIN] Acc: {} | [EVAL] Acc: {}'.format(epoch, train_acc, eval_acc))
+            logging.info(
+                '''***** Epoch {epoch:} *****:
+                \t[TRAIN] Loss: {train_loss:} | Acc: {train_acc:}
+                \t[EVAL] Loss: {eval_loss:} | Acc: {eval_acc:}'''.format(
+                epoch=epoch,
+                train_loss=train_loss,
+                train_acc=train_acc,
+                eval_loss=eval_loss,
+                eval_acc=eval_acc))
+ 
+        # Writing hparams.
+        self.writer.add_hparams(self.hparams, {
+                'hparam/train-loss': train_loss,
+                'hparam/train-accuracy': train_acc,
+                'hparam/eval-loss': eval_loss,
+                'hparam/eval-train': eval_acc
+            }
+        )
 
         # Writing embeddings.
         logging.debug('Adding embeddings...')
-        writer.add_embedding(self.decoder._embedding.weight, metadata=self.vocab.get_words(), global_step=0)
+        self.writer.add_embedding(self.decoder._embedding.weight, metadata=self.vocab.get_words(), global_step=0)
 
         # Closing tensorboard writer
-        writer.close()
+        self.writer.close()
 
 if __name__ == '__main__':
-    logging.basicConfig(format='%(levelname)s: %(message)s',
-                        level=logging.INFO)
+    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
     
     trainer = Train(hparams)
     trainer.train()
-    #train_loop()

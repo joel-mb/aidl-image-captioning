@@ -42,7 +42,8 @@ class Decoder(nn.Module):
     def init_hidden(self):
         pass
 
-    #TODO: # Random entre correcta y generada en el timestep anterior.
+    #TODO: Random entre correcta y generada en el timestep anterior.
+    #TODO: Lengths should be a tensor instead of python list.
     def forward(self, features, captions, lengths):
         """
         Forward decoder.
@@ -174,3 +175,20 @@ class Decoder(nn.Module):
         output = torch.stack(output, 1).cpu().numpy().tolist()
  
         return output[0], state
+
+
+class ImageCaptioningModel(nn.Module):
+
+    def __init__(self, encoder, decoder, fine_tune=False):
+        super(ImageCaptioningModel, self).__init__()
+
+        self.encoder = encoder
+        self.decoder = decoder
+        self.fine_tune = fine_tune  # TODO(joel): Implement!
+
+    def forward(self, imgs, train_caps, lengths):
+        features = self.encoder(imgs)
+        return self.decoder(features, train_caps, lengths)
+
+    def sample(self, img):
+        pass
