@@ -3,12 +3,24 @@
 import collections
 import enum
 
+# ==================================================================================================
+# -- special tokens  -------------------------------------------------------------------------------
+# ==================================================================================================
+
+SpecialTokenTuple = collections.namedtuple('SpecialTokenTuple', ['word', 'index'])
+
 
 class SpecialToken(enum.Enum):
-    START = "<start>"  # index 0
-    END = "<end>"  # index 1
-    PAD = "<pad>"  # index 2
-    UNK = "<unk>"  # index 3
+
+    START = SpecialTokenTuple(word='<start>', index=0)
+    END = SpecialTokenTuple(word='<end>', index=1)
+    PAD = SpecialTokenTuple(word='<pad>', index=2)
+    UNK = SpecialTokenTuple(word='<unk>', index=3)
+
+
+# ==================================================================================================
+# -- vocabulary  -----------------------------------------------------------------------------------
+# ==================================================================================================
 
 
 class Vocabulary(object):
@@ -20,9 +32,12 @@ class Vocabulary(object):
 
         self._counter = collections.Counter()
 
-        # Adding special tokens
+        # Special tokens are not registered in the internal counter and do not follow the minimum
+        # frequency rule, so we insert them manually.
         for special_token in SpecialToken:
-            self.add_word(special_token.value)
+            word, idx = special_token.value.word, special_token.value.index
+            self._word2idx[word] = idx
+            self._idx2word[idx] = word
 
     def __len__(self):
         return len(self._word2idx)
@@ -41,7 +56,7 @@ class Vocabulary(object):
         Adds a new word to the vocabulary and updates the internal counter.
 
             :param word: word to be added.
-            :return: True if the word is successfully added. Otherwise, False.
+            :returns: True if the word is successfully added. Otherwise, False.
         """
         # Ensures that the given word is lowercase.
         _word = word.lower()
@@ -55,15 +70,14 @@ class Vocabulary(object):
         return False
 
     def get_word(self, idx):
-        return self._idx2word.get(idx, SpecialToken.UNK.value)
+        return self._idx2word.get(idx, SpecialToken.UNK.value.word)
 
     def get_index(self, word):
-        # TODO(joel): SpecialToken.UNK.index?
-        return self._word2idx.get(word, 3)
+        return self._word2idx.get(word, SpecialToken.UNK.value.index)
 
     def frequency(self, word):
         """
-        Returns the number of occurrences of the given word.
+        Returns number of occurrences of the given word.
         """
         return self._counter[word]
 
@@ -86,6 +100,7 @@ def build_flickr8k_vocabulary(ann_file, min_freq=1):
 
         :param ann_file: Annotation file with the tokenized captions.
         :param min_freq: Word minimum frequency to be added to the vocabulary.
+        :returns: vocabulary object.
     """
     vocab = Vocabulary(min_freq)
 

@@ -1,7 +1,11 @@
+venv
+
 data/flickr8k/*
 
 *.pyc
 .vscode
 __pycache__
-venv
+
 runs
+models
+checkpoints

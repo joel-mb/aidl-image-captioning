@@ -1,287 +1,404 @@
 #!/usr/bin/env python
+""" Trainning utils """
 
+import argparse
 import logging
+import os
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision import transforms
-
-import torchvision
 from torch.utils.tensorboard import SummaryWriter
 
-from torchtext.data.metrics import bleu_score
+import torchvision
+import torchtext
 
 import dataset
 import model
-import preprocessing
-import util
+import utils
 import vocabulary
 
 # ==================================================================================================
-# -- Hyperparameters -------------------------------------------------------------------------------
-# ==================================================================================================
-
-hparams = {
-    'data_root':
-    '/home/jmoriana/workspace/aidl/aidl-image-captioning/data/flickr8k',
-    'batch_size': 10,
-    'num_workers': 1,
-    'num_epochs': 100,
-    'hidden_size': 128,
-    'embedding_size': 600,
-    'learning_rate': 1e-3,
-    'log_interval': 100,
-    'min_freq': 1,
-    'max_length': 25,
-    'device': 'cuda'
-}
-
-
-# ==================================================================================================
-# -- Training class --------------------------------------------------------------------------------
+# -- training  -------------------------------------------------------------------------------------
 # ==================================================================================================
 
 
 class Train(object):
-
-    def __init__(self, hparams):
-        self.hparams = hparams
+    def __init__(self, args):
+        self.args = args
 
         # -----------
         # Data folder
         # -----------
-        self.data_folder = util.Flickr8kFolder(self.hparams['data_root'])
+        self.data_folder = dataset.Flickr8kFolder(args.data_root)
 
         # -------------------
         # Building vocabulary
         # -------------------
         logging.info('Building vocabulary...')
         self.vocab = vocabulary.build_flickr8k_vocabulary(self.data_folder.ann_file,
-                                                          min_freq=self.hparams['min_freq'])
+                                                          min_freq=self.args.vocab_min_freq)
         logging.debug('Vocabulary size: {}'.format(len(self.vocab)))
 
         # ----------
         # Transforms
         # ----------
         logging.info('Building transforms...')
-        train_transforms = transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+        train_transforms = torchvision.transforms.Compose([
+            torchvision.transforms.RandomResizedCrop(224),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
         ])
 
-        test_transforms = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+        test_transforms = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(256),
+            torchvision.transforms.CenterCrop(224),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
         ])
 
         # --------
         # Datasets
         # --------
         logging.info('Building datasets...')
-        self.flickr_trainset = dataset.Flickr8kDataset(
-            self.data_folder,
-            split='train',
-            transform=train_transforms,
-            target_transform=preprocessing.Word2Idx(self.vocab))
+        self.flickr_trainset = dataset.Flickr8kDataset(self.data_folder,
+                                                       split='train',
+                                                       transform=train_transforms,
+                                                       target_transform=utils.Word2Idx(self.vocab))
 
-        self.flickr_testset = dataset.Flickr8kDataset(
-            self.data_folder,
-            split='test',
-            transform=test_transforms,
-            target_transform=preprocessing.Word2Idx(self.vocab))
+        self.flickr_testset = dataset.Flickr8kDataset(self.data_folder,
+                                                      split='test',
+                                                      transform=test_transforms,
+                                                      target_transform=utils.Word2Idx(self.vocab))
 
         # -----------
         # Data loader
         # -----------
         logging.info('Building data loader...')
-        self.train_loader = torch.utils.data.DataLoader(
-            self.flickr_trainset,
-            batch_size=self.hparams['batch_size'],
-            shuffle=True,
-            num_workers=self.hparams['num_workers'],
-            collate_fn=dataset.flickr_collate_fn)
+        self.train_loader = torch.utils.data.DataLoader(self.flickr_trainset,
+                                                        batch_size=args.batch_size,
+                                                        shuffle=True,
+                                                        num_workers=args.num_workers,
+                                                        collate_fn=dataset.flickr_collate_fn)
 
-        self.test_loader = torch.utils.data.DataLoader(
-            self.flickr_testset,
-            batch_size=self.hparams['batch_size'],
-            shuffle=False,
-            num_workers=self.hparams['num_workers'],
-            collate_fn=dataset.flickr_collate_fn)
+        self.test_loader = torch.utils.data.DataLoader(self.flickr_testset,
+                                                       batch_size=args.batch_size,
+                                                       shuffle=False,
+                                                       num_workers=args.num_workers,
+                                                       collate_fn=dataset.flickr_collate_fn)
 
         # -------------
         # Builing model
         # -------------
-        logging.info('Builing model...')
-        self.encoder = model.Encoder(self.hparams['hidden_size'])
-        self.decoder = model.Decoder(self.hparams['embedding_size'], len(self.vocab), self.hparams['hidden_size'])
-        self.model = model.ImageCaptioningModel(self.encoder, self.decoder)
+        logging.info('Building model...')
+        encoder = model.Encoder(args.hidden_size)
+        decoder = model.Decoder(args.embedding_size, len(self.vocab), args.hidden_size)
+        self.model = model.ImageCaptioningModel(encoder, decoder)
 
-        self.encoder.to(self.hparams['device'])
-        self.decoder.to(self.hparams['device'])
-        self.model.to(self.hparams['device'])
+        self.model.to(args.device)
 
         # ------------------
         # Loss and optimizer
         # ------------------
         self.criterion = nn.CrossEntropyLoss()
 
-        # Observe that only parameters of final encoder layer are being optimized.
-        params = list(self.encoder.model.fc.parameters()) + list(self.decoder.parameters())
-        self.optimizer = optim.Adam(params, lr=self.hparams['learning_rate'])
+        # Only parameters of final encoder layer are being optimized.
+        params = self.model.trainable_parameters()
+        self.optimizer = optim.Adam(params, lr=args.learning_rate)
 
         # -----------
         # Other utils
         # -----------
-        self.idx2word_fn = preprocessing.IdxToWord(self.vocab)
+        self.idx2word_fn = utils.IdxToWord(self.vocab)
 
-    def compute_accuracy(self, predicted, target):
+    @property
+    def hparams(self):
+        return {
+            'num_epochs': self.args.num_epochs,
+            'batch_size': self.args.batch_size,
+            'learning_rate': self.args.learning_rate,
+            'vocab_min_freq': self.args.vocab_min_freq,
+            'hidden_size': self.args.hidden_size,
+            'embedding_size': self.args.embedding_size
+        }
+
+    def _dummy_input(self):
+        """
+        Returns a tuple with a dummy input (random) for the model. This method is used to ease the
+        call of the add_graph method of the tensorboard summary writer.
+        """
+        dummy_imgs = torch.randn(self.args.batch_size, 3, 224, 224, dtype=torch.float32)
+        dummy_caps = torch.randint(low=0,
+                                   high=len(self.vocab) - 1,
+                                   size=(self.args.batch_size, self.args.max_seq_length),
+                                   dtype=torch.int64)
+        dummy_lens = torch.randint(low=1,
+                                   high=self.args.max_seq_length,
+                                   size=(self.args.batch_size, ),
+                                   dtype=torch.int64)
+        dummy_lens, _ = torch.sort(dummy_lens, descending=True)
+
+        return (dummy_imgs.to(self.args.device), dummy_caps.to(self.args.device), dummy_lens)
+
+    def _compute_accuracy(self, predicted, target):
         """
         Computes accuracy based on BLEU.
-        
-            :param predicted: Predicted captions. Shape: [batch_size, max_length]
-            :param target: Target captions. Shape: [batch_size, max_length]
+
+            :param predicted: Predicted captions. Shape: [batch_size, max_length].
+            :param target: Target captions. Shape: [batch_size, max_length].
+            :returns: average of the bleu score of each predicted caption.
         """
         total_bleu = 0
         for predicted_cap, target_cap in zip(predicted, target):
             predicted_cap = self.idx2word_fn(predicted_cap.tolist())
             target_cap = self.idx2word_fn(target_cap.tolist())
 
-            bleu = bleu_score([predicted_cap], [[target_cap]])
+            bleu = torchtext.data.metrics.bleu_score([predicted_cap], [[target_cap]])
             total_bleu += bleu
-        return total_bleu / self.hparams['batch_size']
+        return total_bleu / self.args.batch_size
 
-    def train_epoch(self):
+    def _train_epoch(self, epoch):
         """
-        Training epoch.
+        Training step for one epoch.
 
-            : return: loss and accuracy
+            :param epoch: current epoch (int)
+            :return: average of loss and accurancy for the current epoch.
         """
-        # Activate the train=True flag inside the model. some layers have
-        # different behavior during train and evaluation (like BatchNorm,
-        # Dropout) so setting it matters.
-        self.encoder.train()
-        self.decoder.train()
+        self.model.train()
 
         total_loss = 0
         total_accuracy = 0
         for i, (data, train_caps, loss_caps, lengths) in enumerate(self.train_loader):
 
-            img = data.to(self.hparams['device'])                  # [batch_size, channel, w, h]
-            train_caps = train_caps.to(self.hparams['device'])     # [batch_size, max_lenght]
-            loss_caps = loss_caps.to(self.hparams['device'])       # [batch_size, max_length]
+            img = data.to(self.args.device)  # [batch_size, channel, w, h]
+            train_caps = train_caps.to(self.args.device)  # [batch_size, max_lenght]
+            loss_caps = loss_caps.to(self.args.device)  # [batch_size, max_length]
 
             # 0. Clear gradients.
             self.optimizer.zero_grad()
 
             # 1. Forward the data through the network.
-            #features = self.encoder(img)                           # [batch_size, hidden_size]
-            #out, _ = self.decoder(features, train_caps, lengths)
             out, _ = self.model(img, train_caps, lengths)
 
             # 2. Compute loss.
             loss = self.criterion(out.view(-1, len(self.vocab)), loss_caps.view(-1))
 
-            # 3) Backprop with repsect to the loss function.
+            # 3. Backprop with repsect to the loss function.
             loss.backward()
 
             # 4) Apply the optimizer with a learning step.
             self.optimizer.step()
 
             # 5. Computing loss and accuracy.
-            _, predicted_caps = out.max(2)                        # [batch_size, max_length]
-            total_loss += loss.item()
-            total_accuracy += self.compute_accuracy(train_caps, out.max(2)[1])
+            _, predicted_caps = out.max(2)  # predicted_caps = [batch_size, max_length]
+            loss_value = loss.item()
+            acc_value = self._compute_accuracy(train_caps, predicted_caps)
+
+            if self.args.log_interval > 0 and i % self.args.log_interval == 0:
+                print('Epoch [{}/{}] - [{}/{}] [TRAIN] Loss: {} | Acc: {}'.format(
+                    epoch, self.args.num_epochs, i, len(self.train_loader), loss_value, acc_value))
+
+                # Writing scalars to tensorboard.
+                step = epoch * (len(self.train_loader)) + i
+                self.writer.add_scalar('Loss/train', loss_value, step)
+                self.writer.add_scalar('Accuracy/train', acc_value, step)
+
+            # Adding loss and accuracy to totals.
+            total_loss += loss_value
+            total_accuracy += acc_value
 
         return total_loss / len(self.train_loader), total_accuracy / (len(self.train_loader))
 
-    def validate_epoch(self):
-        # Activate the train=True flag inside the model. some layers have
-        # different behavior during train and evaluation (like BatchNorm,
-        # Dropout) so setting it matters.
-        self.encoder.eval()
-        self.decoder.eval()
+    def _validate_epoch(self, epoch):
+        """
+        Validation step for one epoch.
 
-        total_loss = 0
-        total_accuracy = 0
-        for i, (data, train_caps, loss_caps, lengths) in enumerate(self.test_loader):
+            :param epoch: current epoch (int)
+            :return: average of loss and accurancy for the current epoch.
+        """
+        self.model.eval()
 
-            img = data.to(self.hparams['device'])                  # [batch_size, channel, w, h]
-            train_caps = train_caps.to(self.hparams['device'])     # [batch_size, max_lenght]
-            loss_caps = loss_caps.to(self.hparams['device'])       # [batch_size, max_length]
+        with torch.no_grad():
+            total_loss = 0
+            total_accuracy = 0
+            for i, (data, train_caps, loss_caps, lengths) in enumerate(self.test_loader):
 
-            # 1. Forward the data through the network.
-            #features = self.encoder(img)                           # [batch_size, hidden_size]
-            #out, _ = self.decoder(features, train_caps, lengths)
-            out, _ = self.model(img, train_caps, lengths)
+                img = data.to(self.args.device)  # [batch_size, channel, w, h]
+                train_caps = train_caps.to(self.args.device)  # [batch_size, max_lenght]
+                loss_caps = loss_caps.to(self.args.device)  # [batch_size, max_length]
 
-            # 2. Compute loss.
-            loss = self.criterion(out.view(-1, len(self.vocab)), loss_caps.view(-1))
+                # 1. Forward the data through the network.
+                out, _ = self.model(img, train_caps, lengths)
 
-            # 3. Computing loss and accuracy.
-            total_loss += loss.item()
-            total_accuracy = 0.0  # TODO(joel): Compute BLEU
+                # 2. Compute loss.
+                loss = self.criterion(out.view(-1, len(self.vocab)), loss_caps.view(-1))
+
+                # 3. Computing loss and accuracy.
+                _, predicted_caps = out.max(2)  # predicted_caps = [batch_size, max_length]
+                loss_value = loss.item()
+                acc_value = self._compute_accuracy(train_caps, predicted_caps)
+
+                if self.args.log_interval > 0 and i % self.args.log_interval == 0:
+                    print('Epoch [{}/{}] - [{}/{}] [EVAL] Loss: {} | Acc: {}'.format(
+                        epoch, self.args.num_epochs, i, len(self.test_loader), loss_value,
+                        acc_value))
+
+                    # Writing scalars to tensorboard.
+                    step = epoch * (len(self.test_loader)) + i
+                    self.writer.add_scalar('Loss/test', loss_value, step)
+                    self.writer.add_scalar('Accuracy/test', acc_value, step)
+
+                # Adding loss and accuracy to totals.
+                total_loss += loss_value
+                total_accuracy += acc_value
 
         return total_loss / len(self.test_loader), total_accuracy / (len(self.test_loader))
 
     def train(self):
         """
         Training loop
-
         """
         # Starting tensorboard writer.
-        self.writer = SummaryWriter()  # TODO(joel): Add this to ctor?
+        if self.args.log_interval > 0:
+            self.writer = SummaryWriter()
+            self.writer.add_graph(self.model, self._dummy_input())
 
-        for epoch in range(self.hparams['num_epochs']):
-            
-            train_loss, train_acc = self.train_epoch()
-            eval_loss, eval_acc = self.validate_epoch()
+        for epoch in range(self.args.num_epochs):
 
-            if epoch == 0:
-                dummy_imgs = torch.randn(32, 3, 224, 224, dtype=torch.float32).to('cuda')
-                dummy_caps = torch.randint(low=0, high=8921, size=(32, 25), dtype=torch.int64).to('cuda')
-                dummy_lengths = torch.randint(low=1, high=25, size=(32, ), dtype=torch.int64).to('cuda')
+            train_loss, train_acc = self._train_epoch(epoch)
+            eval_loss, eval_acc = self._validate_epoch(epoch)
 
-                self.writer.add_graph(self.model, (dummy_imgs, dummy_caps, dummy_lengths))
+            # Save checkpoint of the model.
+            if self.args.save_checkpoints:
+                torch.save(
+                    {
+                        'epoch': epoch,
+                        'model_state_dict': self.model.state_dict(),
+                        'optimizer_state_dict': self.optimizer.state_dict(),
+                        'loss': train_loss
+                    }, 'checkpoints/checkpoints-{}.tar'.format(epoch))
 
-            # Writing scalars.
-            self.writer.add_scalar('Loss/train', train_loss, epoch)
-            self.writer.add_scalar('Loss/test', eval_loss, epoch)
-            self.writer.add_scalar('Accuracy/train', train_acc, epoch)
-            self.writer.add_scalar('Accuracy/test', eval_acc, epoch)
+        if self.args.log_interval > 0:
+            # Writing hparams.
+            logging.info('Logging hparams...')
+            self.writer.add_hparams(
+                self.hparams, {
+                    'hparam/train-loss': train_loss,
+                    'hparam/train-accuracy': train_acc,
+                    'hparam/eval-loss': eval_loss,
+                    'hparam/eval-train': eval_acc
+                })
 
-            logging.info(
-                '''***** Epoch {epoch:} *****:
-                \t[TRAIN] Loss: {train_loss:} | Acc: {train_acc:}
-                \t[EVAL] Loss: {eval_loss:} | Acc: {eval_acc:}'''.format(
-                epoch=epoch,
-                train_loss=train_loss,
-                train_acc=train_acc,
-                eval_loss=eval_loss,
-                eval_acc=eval_acc))
- 
-        # Writing hparams.
-        self.writer.add_hparams(self.hparams, {
-                'hparam/train-loss': train_loss,
-                'hparam/train-accuracy': train_acc,
-                'hparam/eval-loss': eval_loss,
-                'hparam/eval-train': eval_acc
-            }
-        )
+            # Writing embeddings.
+            logging.info('Logging embeddings...')
+            self.writer.add_embedding(self.model.decoder.embedding.weight,
+                                      metadata=self.vocab.get_words(),
+                                      global_step=0)
 
-        # Writing embeddings.
-        logging.debug('Adding embeddings...')
-        self.writer.add_embedding(self.decoder._embedding.weight, metadata=self.vocab.get_words(), global_step=0)
+            # Closing tensorboard writer
+            self.writer.close()
 
-        # Closing tensorboard writer
-        self.writer.close()
+        # Saving model
+        if self.args.save_model:
+            logging.info('Saving model...')
+            torch.save(self.model.state_dict(), 'models/model.pt')
+
 
 if __name__ == '__main__':
-    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
-    
-    trainer = Train(hparams)
+    argparser = argparse.ArgumentParser(description=__doc__)
+
+    # Data parameters.
+    argparser.add_argument('--data-root',
+                           metavar='PATH',
+                           type=str,
+                           default='data/flickr8k',
+                           help='path for FLickr8k data (default: data/flickr8k)')
+
+    # Training parameters.
+    argparser.add_argument('--num-epochs',
+                           type=int,
+                           default=5,
+                           help='number of epochs (default: 10)')
+    argparser.add_argument('--batch-size', type=int, default=32, help='batch size (default: 32)')
+    argparser.add_argument('--learning-rate',
+                           type=float,
+                           default=1e-3,
+                           help='learning rate (default: 1e-3)')
+    argparser.add_argument('--num-workers',
+                           type=int,
+                           default=4,
+                           help='number of workers used in the data loader (default: 4)')
+
+    # Model parameters.
+    # TODO: Add different encoder models and fine tunning for encoder.
+    # TODO: Add different encoder (resnet, vgg, ...)
+    # TODO: Add number of layers (--num-layers) for LSTM.
+    argparser.add_argument('--vocab-min-freq',
+                           type=int,
+                           default=1,
+                           help='minimum frequency of a word to be added in the vocab (default: 1)')
+    argparser.add_argument('--max-seq-length',
+                           type=int,
+                           default=25,
+                           help='maximum sequence length (default: 25)')
+    argparser.add_argument('--hidden-size',
+                           type=int,
+                           default=128,
+                           help='hidden size (default: 128)')
+    argparser.add_argument('--embedding-size',
+                           type=int,
+                           default=600,
+                           help='embedding size (default: 600)')
+
+    # Logging parameters
+    argparser.add_argument('--save-model',
+                           action='store_false',
+                           help='save trained model (default: True)')
+    argparser.add_argument('--log-interval',
+                           type=int,
+                           default=100,
+                           help='logging step with tensorboard (per batch) (default: 100)')
+    argparser.add_argument('--save-checkpoints',
+                           action='store_false',
+                           help='save checkpoints (default: True)')
+
+    # Other parameters.
+    argparser.add_argument('--debug', action='store_true', help='enable debug messages')
+
+    args = argparser.parse_args()
+    if args.debug:
+        logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
+    else:
+        logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
+
+    # Checking is GPU is available.
+    if torch.cuda.is_available():
+        logging.info('GPU available, setting device argument to "cuda"')
+        args.device = 'cuda'
+    else:
+        logging.warning('GPU not available, setting device argument to "cpu"')
+        args.device = 'cpu'
+
+    # Finding data root if not set by the user.
+    repo_path = os.path.dirname(os.path.realpath(__file__))
+    if args.data_root == '':
+        args.data_root = os.path.join(repo_path, 'data/flickr8k')
+        if not os.path.exists(args.data_root):
+            raise RuntimeError('Could not find Flickr8k data')
+
+    # Checking whether the models folder exists.
+    models_path = os.path.join(repo_path, 'models')
+    if args.save_model and not os.path.exists(models_path):
+        logging.info('Creating models folder to save traned model')
+        os.mkdir(models_path)
+
+    # Checking whether the checkpoints folder exists.
+    checkpoints_path = os.path.join(repo_path, 'checkpoints')
+    if args.save_checkpoints and not os.path.exists(checkpoints_path):
+        logging.info('Creating checkpoints folder')
+        os.mkdir(checkpoints_path)
+
+    # Trainning model.
+    trainer = Train(args)
     trainer.train()
