@@ -18,6 +18,9 @@ import model
 import utils
 import vocabulary
 
+from custom_models.encoder import Encoder
+from custom_models.decoder import DecoderWithAttention
+
 # ==================================================================================================
 # -- training  -------------------------------------------------------------------------------------
 # ==================================================================================================
@@ -92,8 +95,13 @@ class Train(object):
         # Builing model
         # -------------
         logging.info('Building model...')
-        encoder = model.Encoder(args.hidden_size)
-        decoder = model.Decoder(args.embedding_size, len(self.vocab), args.hidden_size)
+        #encoder = model.Encoder(args.hidden_size)
+        #decoder = model.Decoder(args.embedding_size, len(self.vocab), args.hidden_size)
+
+        encoder_size = 512
+        encoder = Encoder(encoder_size)
+        decoder = DecoderWithAttention(args.embedding_size, len(self.vocab), encoder_size, args.hidden_size, 512)
+
         self.model = model.ImageCaptioningModel(encoder, decoder)
 
         self.model.to(args.device)
@@ -262,7 +270,7 @@ class Train(object):
         # Starting tensorboard writer.
         if self.args.log_interval > 0:
             self.writer = SummaryWriter()
-            self.writer.add_graph(self.model, self._dummy_input())
+            #self.writer.add_graph(self.model, self._dummy_input())
 
         for epoch in range(self.args.num_epochs):
 

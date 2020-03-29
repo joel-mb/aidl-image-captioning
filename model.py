@@ -190,7 +190,7 @@ class ImageCaptioningModel(nn.Module):
         """
         Predicts a caption.
 
-            :param img: float tensor of shape (batch_size, channels, height, width)
+            :param img: float tensor of shape (channels, height, width) # check!!!
             :param max_seq_len: maximum length of the predicted caption.
 
         In prediction time, the model uses embedding of the previously predicted word and the last
@@ -202,7 +202,7 @@ class ImageCaptioningModel(nn.Module):
         # Encoder
         # -------
         # Shape and encoder:
-        #    features -- (batch_size(1), encoded_size==hidden_size)
+        #    features -- (batch_size(1), num_pixels, encoder_size)
         img = img.unsqueeze(0)  #  Adding batch size dim: (batch_size(1), channels, height, width)
         features = self.encoder(img)
 
@@ -216,18 +216,66 @@ class ImageCaptioningModel(nn.Module):
                 init_word = torch.tensor([SpecialToken.START.value.index],
                                          dtype=torch.int64,
                                          device='cuda')
-                h, c = self.decoder.init_hidden(features)
-
-                out, state = self.decoder.forward_step(init_word, (h, c))
+                
+                out, state, alphas = self.decoder.forward_step(features, init_word)
 
             else:
-                out, state = self.decoder.forward_step(pred, state)
+                out, state, alphas = self.decoder.forward_step(features, pred, state)
 
-            # out shape -- (batch_size(1), seq_length(1), vocab_size)
-            _, pred = out.max(2)
-            pred = pred.squeeze(1)
-            last_idx_predicted = pred[0].item()
+            # out shape -- (batch_size(1), vocab_size)
+            _, pred = out.max(1)
+            print('Pred shape: {}'.format(pred.shape))
+            #pred = pred.squeeze(1)
+            last_idx_predicted = pred.item()
+            print('Idx predices: {}'.format(last_idx_predicted))
+            #last_idx_predicted = pred[0].item()
 
             output.append(last_idx_predicted)
 
         return output
+
+    # def predict(self, img, max_seq_length=25):
+    #     """
+    #     Predicts a caption.
+
+    #         :param img: float tensor of shape (batch_size, channels, height, width)
+    #         :param max_seq_len: maximum length of the predicted caption.
+
+    #     In prediction time, the model uses embedding of the previously predicted word and the last
+    #     hidden state.
+    #     """
+    #     output = []
+
+    #     # -------
+    #     # Encoder
+    #     # -------
+    #     # Shape and encoder:
+    #     #    features -- (batch_size(1), encoded_size==hidden_size)
+    #     img = img.unsqueeze(0)  #  Adding batch size dim: (batch_size(1), channels, height, width)
+    #     features = self.encoder(img)
+
+    #     # -------
+    #     # Decoder
+    #     # -------
+    #     last_idx_predicted = -1
+    #     while len(output) < max_seq_length and last_idx_predicted != SpecialToken.END.value.index:
+
+    #         if len(output) == 0:  # First iteration
+    #             init_word = torch.tensor([SpecialToken.START.value.index],
+    #                                      dtype=torch.int64,
+    #                                      device='cuda')
+    #             h, c = self.decoder.init_hidden(features)
+
+    #             out, state = self.decoder.forward_step(init_word, (h, c))
+
+    #         else:
+    #             out, state = self.decoder.forward_step(pred, state)
+
+    #         # out shape -- (batch_size(1), seq_length(1), vocab_size)
+    #         _, pred = out.max(2)
+    #         pred = pred.squeeze(1)
+    #         last_idx_predicted = pred[0].item()
+
+    #         output.append(last_idx_predicted)
+
+    #     return output

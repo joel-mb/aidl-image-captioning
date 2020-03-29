@@ -16,6 +16,9 @@ import utils
 import vocabulary
 import dataset
 
+from custom_models.encoder import Encoder
+from custom_models.decoder import DecoderWithAttention
+
 # ==================================================================================================
 # -- hyperparameters -------------------------------------------------------------------------------
 # ==================================================================================================
@@ -91,8 +94,10 @@ def predict(img_path):
     # Builing model
     # -------------
     logging.info('Building model...')
-    encoder = model.Encoder(hparams['hidden_size'])
-    decoder = model.Decoder(hparams['embedding_size'], len(vocab), hparams['hidden_size'])
+    
+    encoder_size = 512
+    encoder = Encoder(encoder_size)
+    decoder = DecoderWithAttention(hparams['embedding_size'], len(vocab), encoder_size, hparams['hidden_size'], 512)
     ic_model = model.ImageCaptioningModel(encoder, decoder)
 
     ic_model.to(hparams['device'])
