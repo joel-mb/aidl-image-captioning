@@ -292,9 +292,9 @@ class Train(object):
 
             # Writing embeddings.
             logging.info('Logging embeddings...')
-            self.writer.add_embedding(self.model.decoder.embedding.weight,
-                                      metadata=self.vocab.get_words(),
-                                      global_step=0)
+            #self.writer.add_embedding(self.model.decoder.embedding.weight,
+            #                          metadata=self.vocab.get_words(),
+            #                          global_step=0)
 
             # Closing tensorboard writer
             self.writer.close()
