@@ -59,7 +59,7 @@ def show_prediction(img, caption):
 # ==================================================================================================
 
 
-def predict(img_path):
+def predict(img_path, data_root):
     """
     Caption prediction.
 
@@ -68,7 +68,7 @@ def predict(img_path):
     # -----------
     # Data folder
     # -----------
-    data_folder = dataset.Flickr8kFolder(hparams['data_root'])
+    data_folder = dataset.Flickr8kFolder(data_root)
 
     # -------------------
     # Building vocabulary
@@ -120,6 +120,7 @@ def predict(img_path):
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description=__doc__)
     argparser.add_argument('--image-path', '-i', metavar='PATH', type=str)
+    argparser.add_argument('--data-root', metavar='PATH', type=str)
     argparser.add_argument('--debug', action='store_true', help='enable debug messages')
     args = argparser.parse_args()
 
@@ -129,4 +130,4 @@ if __name__ == '__main__':
         logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
     logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
-    predict(args.image_path)
+    predict(args.image_path, args.data_root)
