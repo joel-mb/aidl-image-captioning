@@ -114,7 +114,7 @@ def predict(img_path, data_root):
 
     caption = ic_model.predict(image, hparams['max_seq_length'])
     caption = idx2word_fn(caption)
-
+    print(caption)
     show_prediction(pil_image, caption)
 
 if __name__ == '__main__':
