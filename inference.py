@@ -28,8 +28,10 @@ hparams = {
     'batch_size': 10,
     'num_workers': 1,
     'num_epochs': 100,
+    'encoder_size': 256,
     'hidden_size': 128,
-    'embedding_size': 600,
+    'embedding_size': 256,
+    'attention_size': 256,
     'learning_rate': 1e-3,
     'log_interval': 100,
     'min_freq': 1,
@@ -51,9 +53,7 @@ def show_prediction(img, caption):
     """
     fig = px.imshow(img)
 
-    fig.update_layout(
-        title_text=' '.join(caption)
-    )
+    fig.update_layout(title_text=' '.join(caption))
     fig.show()
 
 
@@ -94,14 +94,14 @@ def predict(img_path):
     # Builing model
     # -------------
     logging.info('Building model...')
-    
-    encoder_size = 512
-    encoder = Encoder(encoder_size)
-    decoder = DecoderWithAttention(hparams['embedding_size'], len(vocab), encoder_size, hparams['hidden_size'], 512)
-    ic_model = model.ImageCaptioningModel(encoder, decoder)
 
-    ic_model.to(hparams['device'])
-    ic_model.load_state_dict(torch.load('models/model.pt'))
+    encoder = Encoder(hparams['encoder_size'])
+    decoder = DecoderWithAttention(hparams['embedding_size'], len(vocab), hparams['encoder_size'],
+                                   hparams['hidden_size'], hparams['attention_size'])
+    net = model.ImageCaptioningNet(encoder, decoder)
+
+    net.to(hparams['device'])
+    net.load_state_dict(torch.load('models/model.pt'))
 
     encoder.eval()
     decoder.eval()
@@ -117,10 +117,19 @@ def predict(img_path):
     pil_image = PIL.Image.open(img_path).convert('RGB')
     image = transform(pil_image).to('cuda')
 
-    caption = ic_model.predict(image, hparams['max_seq_length'])
+    caption, alphas = net.predict(image, hparams['max_seq_length'])
     caption = idx2word_fn(caption)
+    print('Caption: {}'.format(caption))
+    print('Len caption: {}'.format(len(caption)))
+    print('Len alphas: {}'.format(len(alphas)))
+    for word, alpha in zip(caption, alphas[:-1]):
+        alpha = alpha.view(1, 7, 7)
+        print('\nToken: {}'.format(word))
+        print(alpha)
+        print('Sum: {}'.format(alpha.sum()))
 
     show_prediction(pil_image, caption)
+
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description=__doc__)

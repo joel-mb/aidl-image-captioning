@@ -97,13 +97,11 @@ class Train(object):
         logging.info('Building model...')
         #encoder = model.Encoder(args.hidden_size)
         #decoder = model.Decoder(args.embedding_size, len(self.vocab), args.hidden_size)
+        encoder = Encoder(args.encoder_size)
+        decoder = DecoderWithAttention(args.embedding_size, len(self.vocab), args.encoder_size,
+                                       args.hidden_size, args.attention_size)
 
-        encoder_size = 512
-        encoder = Encoder(encoder_size)
-        decoder = DecoderWithAttention(args.embedding_size, len(self.vocab), encoder_size, args.hidden_size, 512)
-
-        self.model = model.ImageCaptioningModel(encoder, decoder)
-
+        self.model = model.ImageCaptioningNet(encoder, decoder)
         self.model.to(args.device)
 
         # ------------------
@@ -205,7 +203,8 @@ class Train(object):
 
             if self.args.log_interval > 0 and i % self.args.log_interval == 0:
                 print('Epoch [{}/{}] - [{}/{}] [TRAIN] Loss: {} | Acc: {}'.format(
-                    epoch, self.args.num_epochs, i, len(self.train_loader), loss_value, acc_value))
+                    epoch + 1, self.args.num_epochs, i, len(self.train_loader), loss_value,
+                    acc_value))
 
                 # Writing scalars to tensorboard.
                 step = epoch * (len(self.train_loader)) + i
@@ -249,7 +248,7 @@ class Train(object):
 
                 if self.args.log_interval > 0 and i % self.args.log_interval == 0:
                     print('Epoch [{}/{}] - [{}/{}] [EVAL] Loss: {} | Acc: {}'.format(
-                        epoch, self.args.num_epochs, i, len(self.test_loader), loss_value,
+                        epoch + 1, self.args.num_epochs, i, len(self.test_loader), loss_value,
                         acc_value))
 
                     # Writing scalars to tensorboard.
@@ -350,14 +349,22 @@ if __name__ == '__main__':
                            type=int,
                            default=25,
                            help='maximum sequence length (default: 25)')
+    argparser.add_argument('--encoder-size',
+                           type=int,
+                           default=256,
+                           help='encoder size (default: 256)')
     argparser.add_argument('--hidden-size',
                            type=int,
                            default=128,
                            help='hidden size (default: 128)')
     argparser.add_argument('--embedding-size',
                            type=int,
-                           default=600,
-                           help='embedding size (default: 600)')
+                           default=256,
+                           help='embedding size (default: 256)')
+    argparser.add_argument('--attention-size',
+                           type=int,
+                           default=256,
+                           help='attention size (default: 256)')
 
     # Logging parameters
     argparser.add_argument('--save-model',
@@ -365,8 +372,8 @@ if __name__ == '__main__':
                            help='save trained model (default: True)')
     argparser.add_argument('--log-interval',
                            type=int,
-                           default=100,
-                           help='logging step with tensorboard (per batch) (default: 100)')
+                           default=25,
+                           help='logging step with tensorboard (per batch) (default: 25)')
     argparser.add_argument('--save-checkpoints',
                            action='store_false',
                            help='save checkpoints (default: True)')
