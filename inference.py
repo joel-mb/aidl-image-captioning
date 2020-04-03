@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import math
 import os
 
 import torch
@@ -18,6 +19,8 @@ import dataset
 
 from custom_models.encoder import Encoder
 from custom_models.decoder import DecoderWithAttention
+
+import numpy as np
 
 # ==================================================================================================
 # -- hyperparameters -------------------------------------------------------------------------------
@@ -44,17 +47,43 @@ hparams = {
 # ==================================================================================================
 
 
-def show_prediction(img, caption):
+def show_prediction(img, caption, alphas=None):
     """
     Shows image and the predicted caption using matplotlib.
 
         :param img: PIL imgae.
         :param caption: tokenized list
     """
-    fig = px.imshow(img)
+    grid = plt.GridSpec(1 + math.ceil(len(caption) / 5), 5, wspace=0.4, hspace=0.3)
 
-    fig.update_layout(title_text=' '.join(caption))
-    fig.show()
+    main_axis = plt.subplot(grid[0, :])
+    main_axis.imshow(img)
+    main_axis.title.set_text(' '.join(caption))
+    main_axis.axis('off')
+
+    ncol = 0
+    nrow = 1
+    for index, word in enumerate(caption):
+
+        print(nrow, ncol)
+        word_axis = plt.subplot(grid[nrow, ncol])
+        word_axis.imshow(img)
+        word_axis.title.set_text(word)
+        word_axis.axis('off')
+
+        alpha = alphas[index].view(1, 7, 7)
+        alpha = alpha.cpu().detach().numpy()[0]
+        print(alpha)
+        print('Alpha size: '.format(alpha.size))
+        #mask = np.repeat(alpha, 32, axis=1)
+        mask = np.repeat(np.repeat(alpha, 32, axis=0), 32, axis=1)
+        print('Mask size: {}'.format(mask.size))
+        word_axis.imshow(mask, alpha=0.6)
+
+        ncol = ncol + 1 if ncol < 4 else 0
+        nrow = 1 + math.trunc((index + 1) / 5.0)
+
+    plt.show()
 
 
 # ==================================================================================================
@@ -119,16 +148,20 @@ def predict(img_path):
 
     caption, alphas = net.predict(image, hparams['max_seq_length'])
     caption = idx2word_fn(caption)
-    print('Caption: {}'.format(caption))
-    print('Len caption: {}'.format(len(caption)))
-    print('Len alphas: {}'.format(len(alphas)))
-    for word, alpha in zip(caption, alphas[:-1]):
-        alpha = alpha.view(1, 7, 7)
-        print('\nToken: {}'.format(word))
-        print(alpha)
-        print('Sum: {}'.format(alpha.sum()))
 
-    show_prediction(pil_image, caption)
+    print(image.cpu().numpy().size)
+    print('Alphas: {}'.format(alphas[0].cpu().detach().numpy()))
+
+    #    print('Caption: {}'.format(caption))
+    #    print('Len caption: {}'.format(len(caption)))
+    #    print('Len alphas: {}'.format(len(alphas)))
+    #    for word, alpha in zip(caption, alphas[:-1]):
+    #        alpha = alpha.view(1, 7, 7)
+    #        print('\nToken: {}'.format(word))
+    #        print(alpha)
+    #        print('Sum: {}'.format(alpha.sum()))
+
+    show_prediction(image.permute(1, 2, 0).cpu().numpy(), caption, alphas[1:])
 
 
 if __name__ == '__main__':
