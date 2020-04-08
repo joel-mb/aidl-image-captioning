@@ -55,7 +55,7 @@ def show_prediction(img, caption, alphas=None):
             word_axis.axis('off')
 
             alpha = alphas[index]
-            num_pixels = alpha.size(1) / 2.0
+            num_pixels = int(math.sqrt(alpha.size(1)))
 
             alpha = alpha.view(1, num_pixels, num_pixels)
             alpha = alpha.cpu().detach().numpy()[0]
@@ -170,8 +170,8 @@ if __name__ == '__main__':
     argparser.add_argument('--data-root',
                            metavar='PATH',
                            type=str,
-                           default='data/flickr8k',
-                           help='path for FLickr8k data (default: data/flickr8k)')
+                           default='',
+                           help='path for FLickr8k data')
     argparser.add_argument('--max-seq-length',
                            type=int,
                            default=25,
@@ -193,4 +193,15 @@ if __name__ == '__main__':
     with open(model_args_path, 'r') as f:
         model_args = json.load(f)
 
-    predict(args.image_path, model_path, model_args, args.data_root, args.max_seq_length)
+    # Finding data root if not set by the user.
+    repo_path = os.path.dirname(os.path.realpath(__file__))
+    if args.data_root == '':
+        if model_args['overfitting'] is True:
+            data_root = os.path.join(repo_path, 'data/flickr8k_overfitting')
+        else:
+            data_root = os.path.join(repo_path, 'data/flickr8k')
+
+        if not os.path.exists(data_root):
+            raise RuntimeError('Could not find Flickr8k data')
+
+    predict(args.image_path, model_path, model_args, data_root, args.max_seq_length)

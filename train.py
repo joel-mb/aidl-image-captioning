@@ -325,7 +325,8 @@ class Train(object):
                 'encoder_size': args.encoder_size,
                 'hidden_size': args.hidden_size,
                 'embedding_size': args.embedding_size,
-                'attention_size': args.attention_size
+                'attention_size': args.attention_size,
+                'overfitting': self.args.overfitting
             }
             with open(os.path.join('models', model_name + '.json'), 'w') as f:
                 json.dump(arguments, f)
@@ -339,8 +340,8 @@ if __name__ == '__main__':
     argparser.add_argument('--data-root',
                            metavar='PATH',
                            type=str,
-                           default='data/flickr8k',
-                           help='path for FLickr8k data (default: data/flickr8k)')
+                           default='',
+                           help='path for FLickr8k data')
 
     # Training parameters.
     argparser.add_argument('--num-epochs',
@@ -404,6 +405,9 @@ if __name__ == '__main__':
     argparser.add_argument('--save-checkpoints',
                            action='store_true',
                            help='save checkpoints (default: False)')
+    argparser.add_argument('--overfitting',
+                           action='store_true',
+                           help='use overfitting dataset (default: False)')
 
     # Other parameters.
     argparser.add_argument('--debug', action='store_true', help='enable debug messages')
@@ -425,7 +429,11 @@ if __name__ == '__main__':
     # Finding data root if not set by the user.
     repo_path = os.path.dirname(os.path.realpath(__file__))
     if args.data_root == '':
-        args.data_root = os.path.join(repo_path, 'data/flickr8k')
+        if args.overfitting is True:
+            args.data_root = os.path.join(repo_path, 'data/flickr8k_overfitting')
+        else:
+            args.data_root = os.path.join(repo_path, 'data/flickr8k')
+
         if not os.path.exists(args.data_root):
             raise RuntimeError('Could not find Flickr8k data')
 
