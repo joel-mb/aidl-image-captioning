@@ -26,7 +26,7 @@ class ImageCaptioningNet(nn.Module):
         """
         Predicts a caption.
 
-            :param img: float tensor of shape (channels, height, width) # check!!!
+            :param img: float tensor of shape (channels, height, width)
             :param max_seq_len: maximum length of the predicted caption.
         """
         # -------
@@ -36,7 +36,6 @@ class ImageCaptioningNet(nn.Module):
         img = img.unsqueeze(0)  #  Adding batch size dim: (batch_size(1), channels, height, width)
         features = self.encoder(img)
 
-        # TODO(check!) size
         # -------
         # Decoder
         # -------

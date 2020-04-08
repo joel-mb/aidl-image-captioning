@@ -2,6 +2,7 @@
 """ Trainning utils """
 
 import argparse
+import json
 import logging
 import os
 
@@ -18,8 +19,8 @@ import model
 import utils
 import vocabulary
 
-from custom_models.encoder import Encoder
-from custom_models.decoder import DecoderWithAttention
+from custom_models.encoder import EncoderFactory
+from custom_models.decoder import DecoderFactory
 
 # ==================================================================================================
 # -- training  -------------------------------------------------------------------------------------
@@ -87,7 +88,7 @@ class Train(object):
 
         self.test_loader = torch.utils.data.DataLoader(self.flickr_testset,
                                                        batch_size=args.batch_size,
-                                                       shuffle=False,
+                                                       shuffle=True,
                                                        num_workers=args.num_workers,
                                                        collate_fn=dataset.flickr_collate_fn)
 
@@ -95,11 +96,10 @@ class Train(object):
         # Builing model
         # -------------
         logging.info('Building model...')
-        #encoder = model.Encoder(args.hidden_size)
-        #decoder = model.Decoder(args.embedding_size, len(self.vocab), args.hidden_size)
-        encoder = Encoder(args.encoder_size)
-        decoder = DecoderWithAttention(args.embedding_size, len(self.vocab), args.encoder_size,
-                                       args.hidden_size, args.attention_size)
+        encoder = EncoderFactory.get_encoder(args.encoder_type, args.encoder_size)
+        decoder = DecoderFactory.get_decoder(args.attention_type, args.embedding_size,
+                                             len(self.vocab), args.encoder_size, encoder.num_pixels,
+                                             args.hidden_size, args.attention_size)
 
         self.model = model.ImageCaptioningNet(encoder, decoder)
         self.model.to(args.device)
@@ -162,7 +162,7 @@ class Train(object):
 
             bleu = torchtext.data.metrics.bleu_score([predicted_cap], [[target_cap]])
             total_bleu += bleu
-        return total_bleu / self.args.batch_size
+        return (total_bleu / self.args.batch_size) * 100.0
 
     def _train_epoch(self, epoch):
         """
@@ -268,7 +268,11 @@ class Train(object):
         """
         # Starting tensorboard writer.
         if self.args.log_interval > 0:
-            self.writer = SummaryWriter()
+            if args.session_name is not None:
+                self.writer = SummaryWriter(os.path.join('runs', args.session_name))
+            else:
+                self.writer = SummaryWriter()
+
             #self.writer.add_graph(self.model, self._dummy_input())
 
         for epoch in range(self.args.num_epochs):
@@ -280,7 +284,7 @@ class Train(object):
             if self.args.save_checkpoints:
                 torch.save(
                     {
-                        'epoch': epoch,
+                        'epoch': epoch + 1,
                         'model_state_dict': self.model.state_dict(),
                         'optimizer_state_dict': self.optimizer.state_dict(),
                         'loss': train_loss
@@ -303,19 +307,35 @@ class Train(object):
                                       metadata=self.vocab.get_words(),
                                       global_step=0)
 
-            # Closing tensorboard writer
+            # Closing tensorboard writer.
             self.writer.close()
 
         # Saving model
         if self.args.save_model:
-            logging.info('Saving model...')
-            torch.save(self.model.state_dict(), 'models/model.pt')
+            model_name = args.session_name if args.session_name is not None else 'model'
+
+            logging.info('Saving model as {}...'.format(model_name))
+            torch.save(self.model.state_dict(), os.path.join('models', model_name + '.pt'))
+
+            logging.info('Saving arguments of the model...')
+            arguments = {
+                'encoder_type': args.encoder_type,
+                'attention_type': args.attention_type,
+                'vocab_min_freq': args.vocab_min_freq,
+                'encoder_size': args.encoder_size,
+                'hidden_size': args.hidden_size,
+                'embedding_size': args.embedding_size,
+                'attention_size': args.attention_size
+            }
+            with open(os.path.join('models', model_name + '.json'), 'w') as f:
+                json.dump(arguments, f)
 
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description=__doc__)
 
     # Data parameters.
+    argparser.add_argument('--session-name', type=str, help='session name')
     argparser.add_argument('--data-root',
                            metavar='PATH',
                            type=str,
@@ -325,7 +345,7 @@ if __name__ == '__main__':
     # Training parameters.
     argparser.add_argument('--num-epochs',
                            type=int,
-                           default=5,
+                           default=10,
                            help='number of epochs (default: 10)')
     argparser.add_argument('--batch-size', type=int, default=32, help='batch size (default: 32)')
     argparser.add_argument('--learning-rate',
@@ -338,9 +358,16 @@ if __name__ == '__main__':
                            help='number of workers used in the data loader (default: 4)')
 
     # Model parameters.
-    # TODO: Add different encoder models and fine tunning for encoder.
-    # TODO: Add different encoder (resnet, vgg, ...)
-    # TODO: Add number of layers (--num-layers) for LSTM.
+    argparser.add_argument('--encoder-type',
+                           type=str,
+                           choices=['resnet101', 'senet154', 'vgg19'],
+                           help="select the encoder type",
+                           default='resnet101')
+    argparser.add_argument('--attention-type',
+                           type=str,
+                           choices=['none', 'additive'],
+                           help="select the decoder type",
+                           default='additive')
     argparser.add_argument('--vocab-min-freq',
                            type=int,
                            default=1,
@@ -351,19 +378,19 @@ if __name__ == '__main__':
                            help='maximum sequence length (default: 25)')
     argparser.add_argument('--encoder-size',
                            type=int,
-                           default=256,
-                           help='encoder size (default: 256)')
+                           default=64,
+                           help='encoder size (default: 128)')
     argparser.add_argument('--hidden-size',
                            type=int,
-                           default=128,
-                           help='hidden size (default: 128)')
+                           default=256,
+                           help='hidden size (default: 256)')
     argparser.add_argument('--embedding-size',
                            type=int,
-                           default=256,
-                           help='embedding size (default: 256)')
+                           default=128,
+                           help='embedding size (default: 128)')
     argparser.add_argument('--attention-size',
                            type=int,
-                           default=256,
+                           default=64,
                            help='attention size (default: 256)')
 
     # Logging parameters
@@ -375,8 +402,8 @@ if __name__ == '__main__':
                            default=25,
                            help='logging step with tensorboard (per batch) (default: 25)')
     argparser.add_argument('--save-checkpoints',
-                           action='store_false',
-                           help='save checkpoints (default: True)')
+                           action='store_true',
+                           help='save checkpoints (default: False)')
 
     # Other parameters.
     argparser.add_argument('--debug', action='store_true', help='enable debug messages')

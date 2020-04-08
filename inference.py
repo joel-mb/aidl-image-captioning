@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import json
 import logging
 import math
 import os
@@ -17,34 +18,17 @@ import utils
 import vocabulary
 import dataset
 
-from custom_models.encoder import Encoder
-from custom_models.decoder import DecoderWithAttention
+from custom_models.encoder import EncoderFactory
+from custom_models.decoder import DecoderFactory
 
 import numpy as np
 
 # ==================================================================================================
-# -- hyperparameters -------------------------------------------------------------------------------
-# ==================================================================================================
-
-hparams = {
-    'data_root': '/home/jmoriana/workspace/aidl/aidl-image-captioning/data/flickr8k',
-    'batch_size': 10,
-    'num_workers': 1,
-    'num_epochs': 100,
-    'encoder_size': 256,
-    'hidden_size': 128,
-    'embedding_size': 256,
-    'attention_size': 256,
-    'learning_rate': 1e-3,
-    'log_interval': 100,
-    'min_freq': 1,
-    'max_seq_length': 25,
-    'device': 'cuda'
-}
-
-# ==================================================================================================
 # -- helpers ---------------------------------------------------------------------------------------
 # ==================================================================================================
+
+MAXIMUM_NCOL = 5
+PIXELS = 224
 
 
 def show_prediction(img, caption, alphas=None):
@@ -54,34 +38,41 @@ def show_prediction(img, caption, alphas=None):
         :param img: PIL imgae.
         :param caption: tokenized list
     """
-    grid = plt.GridSpec(1 + math.ceil(len(caption) / 5), 5, wspace=0.4, hspace=0.3)
+    grid = plt.GridSpec(1 + math.ceil(len(caption) / MAXIMUM_NCOL), MAXIMUM_NCOL)
 
-    main_axis = plt.subplot(grid[0, :])
-    main_axis.imshow(img)
-    main_axis.title.set_text(' '.join(caption))
-    main_axis.axis('off')
+    if alphas is not None:
+        main_axis = plt.subplot(grid[0, :])
+        main_axis.imshow(img)
+        main_axis.title.set_text(' '.join(caption))
+        main_axis.axis('off')
 
-    ncol = 0
-    nrow = 1
-    for index, word in enumerate(caption):
+        ncol = 0
+        nrow = 1
+        for index, word in enumerate(caption):
+            word_axis = plt.subplot(grid[nrow, ncol])
+            word_axis.imshow(img)
+            word_axis.title.set_text(word)
+            word_axis.axis('off')
 
-        print(nrow, ncol)
-        word_axis = plt.subplot(grid[nrow, ncol])
-        word_axis.imshow(img)
-        word_axis.title.set_text(word)
-        word_axis.axis('off')
+            alpha = alphas[index]
+            num_pixels = alpha.size(1) / 2.0
 
-        alpha = alphas[index].view(1, 7, 7)
-        alpha = alpha.cpu().detach().numpy()[0]
-        print(alpha)
-        print('Alpha size: '.format(alpha.size))
-        #mask = np.repeat(alpha, 32, axis=1)
-        mask = np.repeat(np.repeat(alpha, 32, axis=0), 32, axis=1)
-        print('Mask size: {}'.format(mask.size))
-        word_axis.imshow(mask, alpha=0.6)
+            alpha = alpha.view(1, num_pixels, num_pixels)
+            alpha = alpha.cpu().detach().numpy()[0]
+            mask = np.repeat(np.repeat(alpha, PIXELS / num_pixels, axis=0),
+                             PIXELS / num_pixels,
+                             axis=1)
 
-        ncol = ncol + 1 if ncol < 4 else 0
-        nrow = 1 + math.trunc((index + 1) / 5.0)
+            word_axis.imshow(mask, cmap='gray', alpha=0.6)
+
+            ncol = ncol + 1 if ncol < MAXIMUM_NCOL - 1 else 0
+            nrow = 1 + math.trunc((index + 1) / float(MAXIMUM_NCOL))
+
+    else:
+        main_axis = plt.subplot(grid[:, :])
+        main_axis.imshow(img)
+        main_axis.title.set_text(' '.join(caption))
+        main_axis.axis('off')
 
     plt.show()
 
@@ -91,7 +82,7 @@ def show_prediction(img, caption, alphas=None):
 # ==================================================================================================
 
 
-def predict(img_path):
+def predict(img_path, model_path, args, data_root='data/flickr8k', max_seq_length=25):
     """
     Caption prediction.
 
@@ -100,13 +91,14 @@ def predict(img_path):
     # -----------
     # Data folder
     # -----------
-    data_folder = dataset.Flickr8kFolder(hparams['data_root'])
+    data_folder = dataset.Flickr8kFolder(data_root)
 
     # -------------------
     # Building vocabulary
     # -------------------
     logging.info('Building vocabulary...')
-    vocab = vocabulary.build_flickr8k_vocabulary(data_folder.ann_file, min_freq=hparams['min_freq'])
+    vocab = vocabulary.build_flickr8k_vocabulary(data_folder.ann_file,
+                                                 min_freq=args['vocab_min_freq'])
     logging.debug('Vocabulary size: {}'.format(len(vocab)))
 
     # ---------
@@ -124,16 +116,15 @@ def predict(img_path):
     # -------------
     logging.info('Building model...')
 
-    encoder = Encoder(hparams['encoder_size'])
-    decoder = DecoderWithAttention(hparams['embedding_size'], len(vocab), hparams['encoder_size'],
-                                   hparams['hidden_size'], hparams['attention_size'])
+    encoder = EncoderFactory.get_encoder(args['encoder_type'], args['encoder_size'])
+    decoder = DecoderFactory.get_decoder(args['attention_type'], args['embedding_size'], len(vocab),
+                                         args['encoder_size'], encoder.num_pixels,
+                                         args['hidden_size'], args['attention_size'])
+
     net = model.ImageCaptioningNet(encoder, decoder)
-
-    net.to(hparams['device'])
-    net.load_state_dict(torch.load('models/model.pt'))
-
-    encoder.eval()
-    decoder.eval()
+    net.to(device)
+    net.load_state_dict(torch.load(model_path))
+    net.eval()
 
     # -----------
     # Other utils
@@ -144,36 +135,62 @@ def predict(img_path):
     # Prediction
     # ----------
     pil_image = PIL.Image.open(img_path).convert('RGB')
-    image = transform(pil_image).to('cuda')
+    image = transform(pil_image).to(device)
 
-    caption, alphas = net.predict(image, hparams['max_seq_length'])
+    caption, alphas = net.predict(image, max_seq_length)
     caption = idx2word_fn(caption)
 
-    print(image.cpu().numpy().size)
-    print('Alphas: {}'.format(alphas[0].cpu().detach().numpy()))
+    # Show result.
+    plot_transform = torchvision.transforms.Compose(
+        [torchvision.transforms.Resize(256),
+         torchvision.transforms.CenterCrop(224)])
 
-    #    print('Caption: {}'.format(caption))
-    #    print('Len caption: {}'.format(len(caption)))
-    #    print('Len alphas: {}'.format(len(alphas)))
-    #    for word, alpha in zip(caption, alphas[:-1]):
-    #        alpha = alpha.view(1, 7, 7)
-    #        print('\nToken: {}'.format(word))
-    #        print(alpha)
-    #        print('Sum: {}'.format(alpha.sum()))
+    if alphas is not None:
+        alphas = alphas[:-1]
 
-    show_prediction(image.permute(1, 2, 0).cpu().numpy(), caption, alphas[1:])
+    show_prediction(plot_transform(pil_image), caption, alphas)
 
+
+# ==================================================================================================
+# -- main ------------------------------------------------------------------------------------------
+# ==================================================================================================
+
+# Checking if GPU is available.
+if torch.cuda.is_available():
+    device = 'cuda'
+else:
+    device = 'cpu'
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description=__doc__)
-    argparser.add_argument('--image-path', '-i', metavar='PATH', type=str)
-    argparser.add_argument('--debug', action='store_true', help='enable debug messages')
-    args = argparser.parse_args()
+    argparser.add_argument('model_name', type=str, help='name of the model to be used')
+    argparser.add_argument('image_path', metavar='PATH', type=str)
 
+    # Data parameters.
+    argparser.add_argument('--data-root',
+                           metavar='PATH',
+                           type=str,
+                           default='data/flickr8k',
+                           help='path for FLickr8k data (default: data/flickr8k)')
+    argparser.add_argument('--max-seq-length',
+                           type=int,
+                           default=25,
+                           help='maximum sequence length (default: 25)')
+    argparser.add_argument('--debug', action='store_true', help='enable debug messages')
+
+    args = argparser.parse_args()
     if args.debug:
         logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
     else:
         logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
-    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
-    predict(args.image_path)
+    # Loading arguments model.
+    model_path = os.path.join('models', args.model_name + '.pt')
+    model_args_path = os.path.join('models', args.model_name + '.json')
+    if not (os.path.exists(model_path) and os.path.exists(model_args_path)):
+        raise RuntimeError('The provided model does not exist')
+
+    with open(model_args_path, 'r') as f:
+        model_args = json.load(f)
+
+    predict(args.image_path, model_path, model_args, args.data_root, args.max_seq_length)
