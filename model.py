@@ -39,9 +39,8 @@ class ImageCaptioningNet(nn.Module):
         # -------
         # Decoder
         # -------
-        #  out -- (seq_length, )
-        #  state -- (num_layers, hidden_size)
-        #  alphas -- (batch_size, num_pixels)
+        #  out -- list of predicted indices.
+        #  alphas -- list of alphas for each predicted word. shape: (batch_size(1), num_pixels)
         out, alphas = self.decoder.sample(features, max_seq_length)
 
         return out, alphas

@@ -48,8 +48,6 @@ class Decoder(nn.Module):
     def __init__(self, embed_size, vocab_size, encoder_size, num_pixels, hidden_size):
         super(Decoder, self).__init__()
 
-        self._vocab_size = vocab_size
-
         self.linear_features = nn.Linear(encoder_size * num_pixels, hidden_size)
 
         self.embedding = nn.Embedding(vocab_size, embed_size)
@@ -72,7 +70,7 @@ class Decoder(nn.Module):
         """
         Forward decoder.
 
-            :param features: float tensor of shape (batch_size, hidden_size==encoder_size)
+            :param features: float tensor of shape (batch_size, num_pixels, encoder_size)
             :param captions: long tensor of shape (batch_size, max_seq_length)
             :param lengths: long tensor of shape (batch_size, ) containing original length for each
                             caption.
@@ -82,14 +80,15 @@ class Decoder(nn.Module):
         # ----------
         # Embeddings
         # ----------
-        # Word indices to embeddings representation. Captions shape after
-        # embeddings:
+        # Word indices to embeddings representation. Captions shape after embeddings:
         #    captions -- (batch_size, max_length, embed_size)
         captions = self.embedding(captions)
 
         # -------------
         # Flat features
         # -------------
+        # Shape after linear:
+        #    features -- (batch_size, hidden_size)
         features = self.linear_features(features.view(features.size(0), -1))
 
         # ----
@@ -159,8 +158,9 @@ class Decoder(nn.Module):
     def sample(self, features, max_seq_length=25):
         """
         Predicts a caption.
-            :param img: float tensor of shape (batch_size, channels, height, width)
+            :param features: float tensor of shape (batch_size(1), num_pixels, encoder_size)
             :param max_seq_len: maximum length of the predicted caption.
+
         In prediction time, the model uses embedding of the previously predicted word and the last
         hidden state.
         """
@@ -174,7 +174,9 @@ class Decoder(nn.Module):
                                          dtype=torch.int64,
                                          device=device)
 
-                out, state, _ = self._forward_step(init_word)
+                hidden = self.linear_features(features.view(features.size(0), -1))
+                state = self.init_hidden(hidden)
+                out, state, _ = self._forward_step(init_word, state)
 
             else:
                 out, state, _ = self._forward_step(pred, state)
@@ -217,7 +219,7 @@ class DecoderWithAttention(nn.Module):
         """
         Forward decoder.
 
-            :param features: float tensor of shape (batch_size, hidden_size==encoder_size)
+            :param features: float tensor of shape (batch_size, num_pixels, encoder_size)
             :param captions: long tensor of shape (batch_size, max_seq_length)
             :param lengths: long tensor of shape (batch_size, ) containing original length for each
                             caption.
@@ -267,6 +269,8 @@ class DecoderWithAttention(nn.Module):
             # ----------
             # Vocabulary
             # ----------
+            # Shape after linear layer:
+            #    out - (batch_size, vocab_size)
             out = self.linear(hidden)
 
             # Store predictions and alphas.
@@ -284,12 +288,14 @@ class DecoderWithAttention(nn.Module):
         """
         Forward decoder single step.
 
-            - features - (batch_size(1), num_pixels(49), encoder_size(512)) -- encoder out
-            - x - shape (1, )  # last prediction word.
-            - state - h -- (batch_size, hidden_size)
-                      c -- (batch_size, hidden_size)
+            :param features: float tensor of shape (batch_size(1), num_pixels, encoder_size)
+            :param x: long tensor of shape (1, ) containing the index of the predicted word.
+            :param state: tuple (h, c).
+                - h - float tensor of shape (batch_size(1), hidden_size)
+                - c - float tensor of shape (batch_size(1), hidden_size)
 
-        In training mode we use teacher forcing as we know the targets.
+        In prediction time, the model uses embedding of the previously predicted word and the last
+        hidden state.
         """
         # ----------
         # Embeddings
@@ -297,19 +303,10 @@ class DecoderWithAttention(nn.Module):
         # captions -- (batch_size, embed_size)
         x = self.embedding(x)
 
-        # ------------------
-        # Initial LSTM state
-        # ------------------
-        if state is None:
-            hidden = self.linear_features(features.view(features.size(0), -1))
-            state = self.init_hidden(hidden)
-        else:
-            hidden = state[0]
-
         # -------------
         # Decoder steps
         # -------------
-        context, alphas = self.attention(features, hidden)
+        context, alphas = self.attention(features, state[0])
 
         # ---------
         # LSTM step
@@ -340,7 +337,7 @@ class DecoderWithAttention(nn.Module):
         """
         Predicts a caption.
 
-            :param img: float tensor of shape (channels, height, width) # check!!!
+            :param features: float tensor of shape (batch_size(1), num_pixels, encoder_size)
             :param max_seq_len: maximum length of the predicted caption.
 
         In prediction time, the model uses embedding of the previously predicted word and the last
@@ -357,7 +354,9 @@ class DecoderWithAttention(nn.Module):
                                          dtype=torch.int64,
                                          device=device)
 
-                out, state, alphas = self._forward_step(features, init_word)
+                hidden = self.linear_features(features.view(features.size(0), -1))
+                state = self.init_hidden(hidden)
+                out, state, alphas = self._forward_step(features, init_word, state)
 
             else:
                 out, state, alphas = self._forward_step(features, pred, state)

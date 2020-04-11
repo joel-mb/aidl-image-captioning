@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import torch
 import torch.nn as nn
 
@@ -8,17 +10,17 @@ class AdditiveAttention(nn.Module):
     def __init__(self, encoder_size, hidden_size, attention_size):
         super(AdditiveAttention, self).__init__()
 
-        self.Wh = nn.Linear(encoder_size, attention_size)
         self.Wc = nn.Linear(hidden_size, attention_size)
+        self.Wh = nn.Linear(encoder_size, attention_size)
         self.V = nn.Linear(attention_size, 1)
 
     def forward(self, features, hidden):
         """
         Forward method.
 
-            :param features: encoder output.
+            :param features: encoder output (input)
                 - features - float tensor of shape (batch_size, num_pixels, encoder_size)
-            :param hidden: decoder output. 
+            :param hidden: decoder output (context)
                 -hidden - float tensor of shape (batch_size, hidden_size)
         """
         # ------
@@ -46,7 +48,7 @@ class AdditiveAttention(nn.Module):
         # -------
         context = features * alphas.unsqueeze(2)  # (batch_size, num_pixels, encoder_size)
         context = torch.sum(context, dim=1)  # (batch_size, encoder_size)
-        
+
         return context, alphas
 
 

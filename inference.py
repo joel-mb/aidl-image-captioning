@@ -10,7 +10,7 @@ import torch
 import torchvision
 
 import matplotlib.pyplot as plt
-import plotly.express as px
+import numpy as np
 import PIL
 
 import model
@@ -21,7 +21,6 @@ import dataset
 from custom_models.encoder import EncoderFactory
 from custom_models.decoder import DecoderFactory
 
-import numpy as np
 
 # ==================================================================================================
 # -- helpers ---------------------------------------------------------------------------------------
@@ -35,8 +34,9 @@ def show_prediction(img, caption, alphas=None):
     """
     Shows image and the predicted caption using matplotlib.
 
-        :param img: PIL imgae.
-        :param caption: tokenized list
+        :param img: PIL image.
+        :param caption: list of predicted words.
+        :param alphas: list of tensors that represents the alpha for each predicted word.
     """
     grid = plt.GridSpec(1 + math.ceil(len(caption) / MAXIMUM_NCOL), MAXIMUM_NCOL)
 
@@ -85,8 +85,6 @@ def show_prediction(img, caption, alphas=None):
 def predict(img_path, model_path, args, data_root='data/flickr8k', max_seq_length=25):
     """
     Caption prediction.
-
-        :param img_path: path of the image to predict.
     """
     # -----------
     # Data folder
@@ -104,6 +102,7 @@ def predict(img_path, model_path, args, data_root='data/flickr8k', max_seq_lengt
     # ---------
     # Transform
     # ---------
+    logging.info('Building transforms...')
     transform = torchvision.transforms.Compose([
         torchvision.transforms.Resize(256),
         torchvision.transforms.CenterCrop(224),
@@ -115,7 +114,6 @@ def predict(img_path, model_path, args, data_root='data/flickr8k', max_seq_lengt
     # Builing model
     # -------------
     logging.info('Building model...')
-
     encoder = EncoderFactory.get_encoder(args['encoder_type'], args['encoder_size'])
     decoder = DecoderFactory.get_decoder(args['attention_type'], args['embedding_size'], len(vocab),
                                          args['encoder_size'], encoder.num_pixels,
@@ -139,6 +137,7 @@ def predict(img_path, model_path, args, data_root='data/flickr8k', max_seq_lengt
 
     caption, alphas = net.predict(image, max_seq_length)
     caption = idx2word_fn(caption)
+    print(' '.join(caption))
 
     # Show result.
     plot_transform = torchvision.transforms.Compose(
@@ -194,12 +193,12 @@ if __name__ == '__main__':
         model_args = json.load(f)
 
     # Finding data root if not set by the user.
-    repo_path = os.path.dirname(os.path.realpath(__file__))
+    basedir = os.path.dirname(os.path.realpath(__file__))
     if args.data_root == '':
         if model_args['overfitting'] is True:
-            data_root = os.path.join(repo_path, 'data/flickr8k_overfitting')
+            data_root = os.path.join(basedir, 'data/flickr8k_overfitting')
         else:
-            data_root = os.path.join(repo_path, 'data/flickr8k')
+            data_root = os.path.join(basedir, 'data/flickr8k')
 
         if not os.path.exists(data_root):
             raise RuntimeError('Could not find Flickr8k data')

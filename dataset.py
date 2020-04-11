@@ -103,7 +103,7 @@ class Flickr8kDataset(torch.utils.data.Dataset):
             _split_imgs_file = data_folder.eval_imgs_file
 
         # Processing split imgs file.
-        split_imgs = []
+        split_imgs = []  # list of image ids
         with open(_split_imgs_file) as f:
             split_imgs = [line[:-1] for line in f.readlines()]
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-""" Trainning utils """
+""" Trainning utils."""
 
 import argparse
 import json
@@ -34,14 +34,14 @@ class Train(object):
         # -----------
         # Data folder
         # -----------
-        self.data_folder = dataset.Flickr8kFolder(args.data_root)
+        data_folder = dataset.Flickr8kFolder(args.data_root)
 
         # -------------------
         # Building vocabulary
         # -------------------
         logging.info('Building vocabulary...')
-        self.vocab = vocabulary.build_flickr8k_vocabulary(self.data_folder.ann_file,
-                                                          min_freq=self.args.vocab_min_freq)
+        self.vocab = vocabulary.build_flickr8k_vocabulary(data_folder.ann_file,
+                                                          min_freq=args.vocab_min_freq)
         logging.debug('Vocabulary size: {}'.format(len(self.vocab)))
 
         # ----------
@@ -55,7 +55,7 @@ class Train(object):
             torchvision.transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
         ])
 
-        test_transforms = torchvision.transforms.Compose([
+        val_transforms = torchvision.transforms.Compose([
             torchvision.transforms.Resize(256),
             torchvision.transforms.CenterCrop(224),
             torchvision.transforms.ToTensor(),
@@ -66,31 +66,31 @@ class Train(object):
         # Datasets
         # --------
         logging.info('Building datasets...')
-        self.flickr_trainset = dataset.Flickr8kDataset(self.data_folder,
-                                                       split='train',
-                                                       transform=train_transforms,
-                                                       target_transform=utils.Word2Idx(self.vocab))
+        flickr_trainset = dataset.Flickr8kDataset(data_folder,
+                                                  split='train',
+                                                  transform=train_transforms,
+                                                  target_transform=utils.Word2Idx(self.vocab))
 
-        self.flickr_testset = dataset.Flickr8kDataset(self.data_folder,
-                                                      split='test',
-                                                      transform=test_transforms,
-                                                      target_transform=utils.Word2Idx(self.vocab))
+        flickr_valset = dataset.Flickr8kDataset(data_folder,
+                                                split='eval',
+                                                transform=val_transforms,
+                                                target_transform=utils.Word2Idx(self.vocab))
 
         # -----------
         # Data loader
         # -----------
         logging.info('Building data loader...')
-        self.train_loader = torch.utils.data.DataLoader(self.flickr_trainset,
+        self.train_loader = torch.utils.data.DataLoader(flickr_trainset,
                                                         batch_size=args.batch_size,
                                                         shuffle=True,
                                                         num_workers=args.num_workers,
                                                         collate_fn=dataset.flickr_collate_fn)
 
-        self.test_loader = torch.utils.data.DataLoader(self.flickr_testset,
-                                                       batch_size=args.batch_size,
-                                                       shuffle=True,
-                                                       num_workers=args.num_workers,
-                                                       collate_fn=dataset.flickr_collate_fn)
+        self.val_loader = torch.utils.data.DataLoader(flickr_valset,
+                                                      batch_size=args.batch_size,
+                                                      shuffle=True,
+                                                      num_workers=args.num_workers,
+                                                      collate_fn=dataset.flickr_collate_fn)
 
         # -------------
         # Builing model
@@ -109,24 +109,27 @@ class Train(object):
         # ------------------
         self.criterion = nn.CrossEntropyLoss()
 
-        # Only parameters of final encoder layer are being optimized.
+        # Only the parameters of the final encoder layer are being optimized.
         params = self.model.trainable_parameters()
         self.optimizer = optim.Adam(params, lr=args.learning_rate)
 
-        # -----------
-        # Other utils
-        # -----------
+        # ------
+        # Others
+        # ------
         self.idx2word_fn = utils.IdxToWord(self.vocab)
 
     @property
     def hparams(self):
         return {
+            'encoder_type': self.args.encoder_type,
+            'attention_type': self.args.attention_type,
             'num_epochs': self.args.num_epochs,
             'batch_size': self.args.batch_size,
             'learning_rate': self.args.learning_rate,
             'vocab_min_freq': self.args.vocab_min_freq,
+            'embedding_size': self.args.embedding_size,
             'hidden_size': self.args.hidden_size,
-            'embedding_size': self.args.embedding_size
+            'attention_size': self.args.attention_size
         }
 
     def _dummy_input(self):
@@ -151,8 +154,8 @@ class Train(object):
         """
         Computes accuracy based on BLEU.
 
-            :param predicted: Predicted captions. Shape: [batch_size, max_length].
-            :param target: Target captions. Shape: [batch_size, max_length].
+            :param predicted: Predicted captions. Shape: (batch_size, max_length).
+            :param target: Target captions. Shape: (batch_size, max_length).
             :returns: average of the bleu score of each predicted caption.
         """
         total_bleu = 0
@@ -177,15 +180,15 @@ class Train(object):
         total_accuracy = 0
         for i, (data, train_caps, loss_caps, lengths) in enumerate(self.train_loader):
 
-            img = data.to(self.args.device)  # [batch_size, channel, w, h]
-            train_caps = train_caps.to(self.args.device)  # [batch_size, max_lenght]
-            loss_caps = loss_caps.to(self.args.device)  # [batch_size, max_length]
+            imgs = data.to(self.args.device)  # (batch_size, channels, h, w)
+            train_caps = train_caps.to(self.args.device)  # (batch_size, max_length)
+            loss_caps = loss_caps.to(self.args.device)  # (batch_size, max_length)
 
             # 0. Clear gradients.
             self.optimizer.zero_grad()
 
             # 1. Forward the data through the network.
-            out, _ = self.model(img, train_caps, lengths)
+            out, _ = self.model(imgs, train_caps, lengths)
 
             # 2. Compute loss.
             loss = self.criterion(out.view(-1, len(self.vocab)), loss_caps.view(-1))
@@ -197,7 +200,7 @@ class Train(object):
             self.optimizer.step()
 
             # 5. Computing loss and accuracy.
-            _, predicted_caps = out.max(2)  # predicted_caps = [batch_size, max_length]
+            _, predicted_caps = out.max(2)  # predicted_caps = (batch_size, max_length)
             loss_value = loss.item()
             acc_value = self._compute_accuracy(train_caps, predicted_caps)
 
@@ -229,38 +232,38 @@ class Train(object):
         with torch.no_grad():
             total_loss = 0
             total_accuracy = 0
-            for i, (data, train_caps, loss_caps, lengths) in enumerate(self.test_loader):
+            for i, (data, train_caps, loss_caps, lengths) in enumerate(self.val_loader):
 
-                img = data.to(self.args.device)  # [batch_size, channel, w, h]
-                train_caps = train_caps.to(self.args.device)  # [batch_size, max_lenght]
-                loss_caps = loss_caps.to(self.args.device)  # [batch_size, max_length]
+                imgs = data.to(self.args.device)  # (batch_size, channels, h, w)
+                train_caps = train_caps.to(self.args.device)  # (batch_size, max_length)
+                loss_caps = loss_caps.to(self.args.device)  # (batch_size, max_length)
 
                 # 1. Forward the data through the network.
-                out, _ = self.model(img, train_caps, lengths)
+                out, _ = self.model(imgs, train_caps, lengths)
 
                 # 2. Compute loss.
                 loss = self.criterion(out.view(-1, len(self.vocab)), loss_caps.view(-1))
 
                 # 3. Computing loss and accuracy.
-                _, predicted_caps = out.max(2)  # predicted_caps = [batch_size, max_length]
+                _, predicted_caps = out.max(2)  # predicted_caps = (batch_size, max_length)
                 loss_value = loss.item()
                 acc_value = self._compute_accuracy(train_caps, predicted_caps)
 
                 if self.args.log_interval > 0 and i % self.args.log_interval == 0:
                     print('Epoch [{}/{}] - [{}/{}] [EVAL] Loss: {} | Acc: {}'.format(
-                        epoch + 1, self.args.num_epochs, i, len(self.test_loader), loss_value,
+                        epoch + 1, self.args.num_epochs, i, len(self.val_loader), loss_value,
                         acc_value))
 
                     # Writing scalars to tensorboard.
-                    step = epoch * (len(self.test_loader)) + i
-                    self.writer.add_scalar('Loss/test', loss_value, step)
-                    self.writer.add_scalar('Accuracy/test', acc_value, step)
+                    step = epoch * (len(self.val_loader)) + i
+                    self.writer.add_scalar('Loss/eval', loss_value, step)
+                    self.writer.add_scalar('Accuracy/eval', acc_value, step)
 
                 # Adding loss and accuracy to totals.
                 total_loss += loss_value
                 total_accuracy += acc_value
 
-        return total_loss / len(self.test_loader), total_accuracy / (len(self.test_loader))
+        return total_loss / len(self.val_loader), total_accuracy / (len(self.val_loader))
 
     def train(self):
         """
@@ -273,7 +276,7 @@ class Train(object):
             else:
                 self.writer = SummaryWriter()
 
-            #self.writer.add_graph(self.model, self._dummy_input())
+            self.writer.add_graph(self.model, self._dummy_input())
 
         for epoch in range(self.args.num_epochs):
 
@@ -288,10 +291,9 @@ class Train(object):
                         'model_state_dict': self.model.state_dict(),
                         'optimizer_state_dict': self.optimizer.state_dict(),
                         'loss': train_loss
-                    }, 'checkpoints/checkpoints-{}.tar'.format(epoch))
+                    }, 'checkpoints/checkpoints-{}.tar'.format(epoch + 1))
 
         if self.args.log_interval > 0:
-            # Writing hparams.
             logging.info('Logging hparams...')
             self.writer.add_hparams(
                 self.hparams, {
@@ -301,31 +303,28 @@ class Train(object):
                     'hparam/eval-train': eval_acc
                 })
 
-            # Writing embeddings.
             logging.info('Logging embeddings...')
             self.writer.add_embedding(self.model.decoder.embedding.weight,
                                       metadata=self.vocab.get_words(),
                                       global_step=0)
 
-            # Closing tensorboard writer.
             self.writer.close()
 
-        # Saving model
-        if self.args.save_model:
-            model_name = args.session_name if args.session_name is not None else 'model'
+        if not self.args.no_save_model:
+            model_name = self.args.session_name if self.args.session_name is not None else 'model'
 
             logging.info('Saving model as {}...'.format(model_name))
             torch.save(self.model.state_dict(), os.path.join('models', model_name + '.pt'))
 
             logging.info('Saving arguments of the model...')
             arguments = {
-                'encoder_type': args.encoder_type,
-                'attention_type': args.attention_type,
-                'vocab_min_freq': args.vocab_min_freq,
-                'encoder_size': args.encoder_size,
-                'hidden_size': args.hidden_size,
-                'embedding_size': args.embedding_size,
-                'attention_size': args.attention_size,
+                'encoder_type': self.args.encoder_type,
+                'attention_type': self.args.attention_type,
+                'vocab_min_freq': self.args.vocab_min_freq,
+                'encoder_size': self.args.encoder_size,
+                'hidden_size': self.args.hidden_size,
+                'embedding_size': self.args.embedding_size,
+                'attention_size': self.args.attention_size,
                 'overfitting': self.args.overfitting
             }
             with open(os.path.join('models', model_name + '.json'), 'w') as f:
@@ -361,7 +360,7 @@ if __name__ == '__main__':
     # Model parameters.
     argparser.add_argument('--encoder-type',
                            type=str,
-                           choices=['resnet101', 'senet154', 'vgg19'],
+                           choices=['resnet101', 'senet154'],
                            help="select the encoder type",
                            default='resnet101')
     argparser.add_argument('--attention-type',
@@ -395,19 +394,13 @@ if __name__ == '__main__':
                            help='attention size (default: 256)')
 
     # Logging parameters
-    argparser.add_argument('--save-model',
-                           action='store_false',
-                           help='save trained model (default: True)')
+    argparser.add_argument('--no-save-model', action='store_true', help='do not save trained model')
     argparser.add_argument('--log-interval',
                            type=int,
                            default=25,
                            help='logging step with tensorboard (per batch) (default: 25)')
-    argparser.add_argument('--save-checkpoints',
-                           action='store_true',
-                           help='save checkpoints (default: False)')
-    argparser.add_argument('--overfitting',
-                           action='store_true',
-                           help='use overfitting dataset (default: False)')
+    argparser.add_argument('--save-checkpoints', action='store_true', help='save checkpoints')
+    argparser.add_argument('--overfitting', action='store_true', help='use overfitting dataset')
 
     # Other parameters.
     argparser.add_argument('--debug', action='store_true', help='enable debug messages')
@@ -439,8 +432,8 @@ if __name__ == '__main__':
 
     # Checking whether the models folder exists.
     models_path = os.path.join(repo_path, 'models')
-    if args.save_model and not os.path.exists(models_path):
-        logging.info('Creating models folder to save traned model')
+    if not args.no_save_model and not os.path.exists(models_path):
+        logging.info('Creating models folder to save the trained model')
         os.mkdir(models_path)
 
     # Checking whether the checkpoints folder exists.
