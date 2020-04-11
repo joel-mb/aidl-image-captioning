@@ -423,9 +423,9 @@ if __name__ == '__main__':
     repo_path = os.path.dirname(os.path.realpath(__file__))
     if args.data_root == '':
         if args.overfitting is True:
-            args.data_root = os.path.join(repo_path, 'data/flickr8k_overfitting')
+            args.data_root = os.path.join(repo_path, 'data', 'flickr8k_overfitting')
         else:
-            args.data_root = os.path.join(repo_path, 'data/flickr8k')
+            args.data_root = os.path.join(repo_path, 'data', 'flickr8k')
 
         if not os.path.exists(args.data_root):
             raise RuntimeError('Could not find Flickr8k data')

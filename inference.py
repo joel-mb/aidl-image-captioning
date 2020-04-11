@@ -196,9 +196,9 @@ if __name__ == '__main__':
     basedir = os.path.dirname(os.path.realpath(__file__))
     if args.data_root == '':
         if model_args['overfitting'] is True:
-            data_root = os.path.join(basedir, 'data/flickr8k_overfitting')
+            data_root = os.path.join(basedir, 'data', 'flickr8k_overfitting')
         else:
-            data_root = os.path.join(basedir, 'data/flickr8k')
+            data_root = os.path.join(basedir, 'data', 'flickr8k')
 
         if not os.path.exists(data_root):
             raise RuntimeError('Could not find Flickr8k data')
