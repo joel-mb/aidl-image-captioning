@@ -206,7 +206,7 @@ class Train(object):
 
             if self.args.log_interval > 0 and i % self.args.log_interval == 0:
                 print('Epoch [{}/{}] - [{}/{}] [TRAIN] Loss: {} | Acc: {}'.format(
-                    epoch + 1, self.args.num_epochs, i, len(self.train_loader), loss_value,
+                    epoch + 1, self.args.num_epochs, i + 1, len(self.train_loader), loss_value,
                     acc_value))
 
                 # Writing scalars to tensorboard.
@@ -251,7 +251,7 @@ class Train(object):
 
                 if self.args.log_interval > 0 and i % self.args.log_interval == 0:
                     print('Epoch [{}/{}] - [{}/{}] [EVAL] Loss: {} | Acc: {}'.format(
-                        epoch + 1, self.args.num_epochs, i, len(self.val_loader), loss_value,
+                        epoch + 1, self.args.num_epochs, i + 1, len(self.val_loader), loss_value,
                         acc_value))
 
                     # Writing scalars to tensorboard.
@@ -340,7 +340,7 @@ if __name__ == '__main__':
                            metavar='PATH',
                            type=str,
                            default='',
-                           help='path for FLickr8k data')
+                           help='path to FLickr8k data')
 
     # Training parameters.
     argparser.add_argument('--num-epochs',
@@ -379,7 +379,7 @@ if __name__ == '__main__':
     argparser.add_argument('--encoder-size',
                            type=int,
                            default=64,
-                           help='encoder size (default: 128)')
+                           help='encoder size (default: 64)')
     argparser.add_argument('--hidden-size',
                            type=int,
                            default=256,
@@ -391,7 +391,7 @@ if __name__ == '__main__':
     argparser.add_argument('--attention-size',
                            type=int,
                            default=64,
-                           help='attention size (default: 256)')
+                           help='attention size (default: 64)')
 
     # Logging parameters
     argparser.add_argument('--no-save-model', action='store_true', help='do not save trained model')
@@ -400,7 +400,7 @@ if __name__ == '__main__':
                            default=25,
                            help='logging step with tensorboard (per batch) (default: 25)')
     argparser.add_argument('--save-checkpoints', action='store_true', help='save checkpoints')
-    argparser.add_argument('--overfitting', action='store_true', help='use overfitting dataset')
+    argparser.add_argument('--overfitting', action='store_true', help='use the overfitting dataset')
 
     # Other parameters.
     argparser.add_argument('--debug', action='store_true', help='enable debug messages')
