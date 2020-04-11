@@ -26,7 +26,7 @@ All the training logic is inside the `train.py` file. The following arguments ma
 | --attention-type `<CHOICE>` | attention type of the decoder (choices: [`none`, `additive`], default: `additive`) |
 | --vocab-size `<INT>` | minimum frequency of a word to be added in the vocab (default: 1) |
 | --max-seq-length `<INT>` | maximum sequence length (default: 25) |
-| --encoder-size `<INT>` | 'encoder size (default: 64) |
+| --encoder-size `<INT>` | encoder size (default: 64) |
 | --hidden-size `<INT>` | hidden size (default: 256) |
 | --embedding-size `<INT>` | embedding size (default: 128) |
 | --attention-size `<INT>` | attention size (default: 64) |
