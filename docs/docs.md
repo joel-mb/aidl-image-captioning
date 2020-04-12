@@ -148,9 +148,25 @@ In this section, we use the entire dataset with the following parameters:
 | attention-size | 64 |
 <!--![Alt text](imgs/Accuracy_train.svg)-->
 
-**Accuracy**
+Accuracy train             |  Accuracy eval
+:-------------------------:|:-------------------------:
+![accuracy_train](imgs/Accuracy_train.svg)  |  ![accuracy_eval](imgs/Accuracy_eval.svg)
 
-<img src="imgs/Accuracy_train.svg">
+
+Loss train             |  Loss eval
+:-------------------------:|:-------------------------:
+![loss_train](imgs/Loss_train.svg)  |  ![loss_train](imgs/Loss_eval.svg)
+
+
+
+<!--<img src="imgs/Accuracy_train.svg">
+
+<img src="imgs/Accuracy_eval.svg">
+
+<img src="imgs/Loss_train.svg">
+
+<img src="imgs/Loss_eval.svg">-->
+
 
 ## Examples
 ![](https://i.imgur.com/yiOwTRg.png)
