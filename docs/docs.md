@@ -1,7 +1,5 @@
 # Image Captioning
 
----
-
 ## Index
 
 * [Dataset](##dataset)
@@ -19,55 +17,52 @@ The dataset used to build the model is [Flickr8k](http://academictorrents.com/de
 
 The dataset is been splitted into three parts. The trainset to actualize the weights, 6000 images. The validation set to determine when the model has learned and the testset with 1000 images to asses the performance, computing the BLEU metric. 
 
-**Image Dataset**
-
-<center>
-
 | Train | Validation | Test |
-| -------- | -------- | -------- |
-| 6000 Photos    | 1000 Photos    | 1000 Photos    |
+| --- | --- | --- |
+| 6000 Photos | 1000 Photos | 1000 Photos |
 
-</center>
+Example showing an image and its captions:
 
+<p align="center">
+  <img src="imgs/sample.jpg">
+</p>
 
-![](https://i.imgur.com/apFoFKa.png)
-![](https://i.imgur.com/Xeb2UuK.png)
+| Image | Capion |
+| --- | --- |
+44856031_0d82c2c7d1.jpg#0 | A brown dog is sprayed with water .
+44856031_0d82c2c7d1.jpg#1 | A dog is being squirted with water in the face outdoors .
+44856031_0d82c2c7d1.jpg#2 | A dog stands on his hind feet and catches a stream of water .
+44856031_0d82c2c7d1.jpg#3 | A jug is jumping up it is being squirted with a jet of water .
+44856031_0d82c2c7d1.jpg#4 | A tan , male dog is jumping up to get a drink of water from a spraying bottle 
 
-
-**Vocabulary**
-
-<center>
+### Vocabulary
 
 | Train | Test |
-| -------- | -------- |
+| --- | --- |
 | 7.489 non-stopwords| 4.727 non-stopwords|
-
-</center>
 
 It is important to asses the model with the same vocabulary distribution as the one it has been trained for, we can see the most frequent words are the same in both datasets
 
- <img width="920" height="600" src="https://i.imgur.com/gDvOvIz.png">
-
- <img width="920" height="600" src="https://i.imgur.com/RT1CgLg.png">
+<p align="center">
+  <img src="imgs/vocabulary1.png">
+  <img src="imgs/vocabulary2.png">
+</p>
 
 We can do a similar assessment with the distribution of the caption lengths. We can see that they look alike.
 
- <img width="920" height="600" src="https://i.imgur.com/4MQWj9V.png">
+<p align="center">
+  <img src="imgs/vocabulary3.png">
+</p>
 
 It's also important to not expect the model to predict captions with words it hasn't seen before. Those are the most frequent words on the test set that are not in the trainset.
 
- <img width="920" height="600" src="https://i.imgur.com/7CFE30H.png">
-
+<p align="center">
+  <img src="imgs/vocabulary4.png">
+</p>
 
 ## Ingestion pipeline
-In this project, the images must be transformated into tensors in order to get the results. In our training set,  we tried two diferent ingestion pipelines, with and without data aumentation, to study how the results change. Here we can see the transformations:
 
-**With Data Augmentation**
-![](https://i.imgur.com/HMdFZKe.png)
-
-
-******Without Data Augmentation******
-![](https://i.imgur.com/QDEi9rA.png)
+TODO
 
 ## Model architecture
 
@@ -86,7 +81,7 @@ This model uses a vanilla LSTM as decoder and the last layer of the encoder inpu
 
 The next picture summarizes the architecture of this model:
 
-![](https://i.imgur.com/a4Hp0Lf.png)
+![baseline_model](imgs/baseline_model.svg)
 
 We use two different methods depending on if we are on training or inference time:
 
@@ -116,17 +111,11 @@ TODO
 ### Overfitting
 We use a reduced dataset in order to perform overfitting to the models explained above. The following table summarizes the number of pictures contained in each split:
 
-<center>
-
 | Train | Validation | Test |
 | -------- | -------- | -------- |
 | 15 Photos    | 5 Photos    | 5 Photos    |
 
-</center>
-
 On the other hand, the next table depicts the selected parameters for the models:
-
-<center>
 
 | Parameter | value |
 | --- | --- |
@@ -139,8 +128,6 @@ On the other hand, the next table depicts the selected parameters for the models
 | hidden-size | 256 |
 | embedding-size | 128 |
 | attention-size | 64 |
-
-</center>
 
 ### Results
 
@@ -155,8 +142,6 @@ Loss train | Loss eval
 
 In this section, we use the entire dataset with the following parameters:
 
-<center>
-
 | Parameter | value |
 | --- | --- |
 | num-epochs | 20 |
@@ -169,41 +154,20 @@ In this section, we use the entire dataset with the following parameters:
 | embedding-size | 128 |
 | attention-size | 64 |
 
-</center>
-
 ## Examples
-![](https://i.imgur.com/yiOwTRg.png)
+![motorbike](imgs/bike_captioning.png)
 
 
 ## Conclusions and next steps
 
 **What did we learn?**
 * Course Concepts & AI Background.
-* How important is the your DataSet.
+* How important is to study the dataset.
 * Importance of the continous improvement of the architecture.
-    
 
 **What would we have liked to do?**
-* Keep on improving the performance of our model trying new architectures (Hard Attention, bidirectional decoder...).
+* Keep on improving the performance of our model trying new architectures (bidirectional decoder...).
 * Apply learning rate scheduler, checkpoints.
-* Training time changing image quality.
-* Build our own image encoder.
-* Specific field (eg cars, planes...)
-* Bidirectional LSTM
-
-
-
-## References
-[1] https://www.cv-foundation.org/openaccess/content_cvpr_2015/papers/Karpathy_Deep_Visual-Semantic_Alignments_2015_CVPR_paper.pdf
-
-[2] https://pytorch.org/docs/stable/optim.html
-
-[3] https://blogs.nvidia.com/blog/2019/02/07/what-is-transfer-learning/
-
-[4] https://arxiv.org/pdf/1908.01878v2.pdf
-
-[5] https://www.pyimagesearch.com/2017/03/20/imagenet-vggnet-resnet-inception-xception-keras/
-
-[6] https://lab.heuritech.com/attention-mechanism
-
-[7] https://blog.floydhub.com/attention-mechanism/
+* Fine tune encoder or build our own (big dataset needed).
+* Use pretrained word embeddings.
+* Specific field (e.g., cars, planes...).
