@@ -2,12 +2,12 @@
 
 ## Index
 
-* [Dataset](##dataset)
-* [Ingestion pipeline](##ingestion-pipeline)
-* [Model architecture](##model-architecture)
-* [Implementation](##implementation)
-* [Results](##results)
-* [Conclusions and next steps](##conclusions-and-next-steps)
+* [Dataset](#dataset)
+* [Ingestion pipeline](#ingestion-pipeline)
+* [Model architecture](#model-architecture)
+* [Implementation](#implementation)
+* [Results](#results)
+* [Conclusions and next steps](#conclusions-and-next-steps)
 
 ---
 
