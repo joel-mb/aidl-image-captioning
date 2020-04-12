@@ -1,8 +1,4 @@
-# DL Project: Image Captioning
-
-**Authors:** Joel Moriana, Oscar Redondo, Ferran Pauls, Josep M Carreras
-
-**Mentor:** Carlos Escolano
+# Image Captioning
 
 ---
 
@@ -25,9 +21,14 @@ The dataset is been splitted into three parts. The trainset to actualize the wei
 
 **Image Dataset**
 
+<center>
+
 | Train | Validation | Test |
 | -------- | -------- | -------- |
 | 6000 Photos    | 1000 Photos    | 1000 Photos    |
+
+</center>
+
 
 ![](https://i.imgur.com/apFoFKa.png)
 ![](https://i.imgur.com/Xeb2UuK.png)
@@ -35,9 +36,13 @@ The dataset is been splitted into three parts. The trainset to actualize the wei
 
 **Vocabulary**
 
+<center>
+
 | Train | Test |
 | -------- | -------- |
 | 7.489 non-stopwords| 4.727 non-stopwords|
+
+</center>
 
 It is important to asses the model with the same vocabulary distribution as the one it has been trained for, we can see the most frequent words are the same in both datasets
 
@@ -98,7 +103,7 @@ The output of the attention is a conext vector as a weighted sum of the features
 
 The overall architecture of this model is shown in the next figure. It should be taken into account that the input of each LSTM cell is the concatenation of the embedding and the context vector computed by the attention block.
 
-![](https://i.imgur.com/lA7D8nm.png)
+![attention_model](imgs/attention_model.svg)
 
 Similarly to the model explained above, we use teacher forcing while training.
 
@@ -111,11 +116,17 @@ TODO
 ### Overfitting
 We use a reduced dataset in order to perform overfitting to the models explained above. The following table summarizes the number of pictures contained in each split:
 
+<center>
+
 | Train | Validation | Test |
 | -------- | -------- | -------- |
 | 15 Photos    | 5 Photos    | 5 Photos    |
 
+</center>
+
 On the other hand, the next table depicts the selected parameters for the models:
+
+<center>
 
 | Parameter | value |
 | --- | --- |
@@ -129,11 +140,22 @@ On the other hand, the next table depicts the selected parameters for the models
 | embedding-size | 128 |
 | attention-size | 64 |
 
-TODO
+</center>
 
 ### Results
 
+Accuracy train | Accuracy eval
+:---:|:---:
+ <img src="imgs/Accuracy_train.svg" width=1000 />  |  <img src="imgs/Accuracy_eval.svg" width=1000 /> 
+
+
+Loss train | Loss eval
+:---: | :---:
+<img src="imgs/Loss_train.svg" width=1000> |  <img src="imgs/Loss_eval.svg" width=1000>
+
 In this section, we use the entire dataset with the following parameters:
+
+<center>
 
 | Parameter | value |
 | --- | --- |
@@ -146,27 +168,8 @@ In this section, we use the entire dataset with the following parameters:
 | hidden-size | 256 |
 | embedding-size | 128 |
 | attention-size | 64 |
-<!--![Alt text](imgs/Accuracy_train.svg)-->
 
-Accuracy train             |  Accuracy eval
-:-------------------------:|:-------------------------:
-![accuracy_train](imgs/Accuracy_train.svg)  |  ![accuracy_eval](imgs/Accuracy_eval.svg)
-
-
-Loss train             |  Loss eval
-:-------------------------:|:-------------------------:
-![loss_train](imgs/Loss_train.svg)  |  ![loss_train](imgs/Loss_eval.svg)
-
-
-
-<!--<img src="imgs/Accuracy_train.svg">
-
-<img src="imgs/Accuracy_eval.svg">
-
-<img src="imgs/Loss_train.svg">
-
-<img src="imgs/Loss_eval.svg">-->
-
+</center>
 
 ## Examples
 ![](https://i.imgur.com/yiOwTRg.png)
