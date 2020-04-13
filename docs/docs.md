@@ -106,31 +106,32 @@ Similarly to the model explained above, we use teacher forcing while training.
 
 TODO
 
-## Problems
+## Difficulties
 
-### The models is always predicting `<START>`
+### The model is always predicting `<START>`
 
-This issue comes up due to two factors:
+This issue came up due to two factors:
 
-* We use teacher forcing when training and validating.
-* We were using the same transformed caption for training and computing the loss.
+* We used teacher forcing in validation.
+* We used the same transformed caption for both training and loss computation and as a consecuence we had problems with the special tokens.
 
-Our initial target caption had the following form: ['`<START>`', 'A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water', '`<END>`']
+Example of an initial target caption:
 
-As we were using the same tokenized sequence to compute the loss an train, the model was learning to always predict the input word.
+['`<START>`', 'A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water', '`<END>`']
 
-Therefore, while training, the model seemed to learn but at inference time, the model was predicting a sequence of `<START>` words because the first input to the model was the <START> word.
+As we were using the same tokenized sequence to compute the loss and train, the model was learning to always predict the input word, therefore, while training, the model seemed to learn but at inference time, the model was predicting a sequence of `<START>` words because the first input to the model was the <START> word:
+
+<p align="center">
+  <img src="imgs/issues/start_issue.png">
+</p>
 
 This issue was solved by applying a shift and using two different captions:
-
 * The source caption used for training without the `<END>` token:  ['`<START>`', 'A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water']
+* The target caption used to compute the loss without the `<START>` token because we do not want to learn to produce the `<START>`:  ['A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water', `<END>`]
 
-* The target caption used to compute the loss without the `<START>` token:  ['A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water']
+### No overfitting without attention
 
-
-### No overfitting whithout attention
-
-While doing overfitting without attention, the loss was not converging to zero:
+While doing overfitting without attention, the loss was not converging to zero while the accuracy in training was 100%:
 
 Accuracy train | Accuracy eval
 :---:|:---:
@@ -140,11 +141,11 @@ Loss train | Loss eval
 :---: | :---:
 <img src="imgs/issues/Loss_train_ignore_index_issue.svg" width=1000> |  <img src="imgs/issues/Loss_eval_ignore_index_issue.svg" width=1000>
 
-This issues was due to we were taking into account the `<PAD>` when computing the loss and that part of the loss was constant. The issue was solved by adding de `ignored_index` =  `<PAD>`.
+This issue was due to we were taking into account the `<PAD>` token when computing the loss and that part of the loss was constant. The issue was solved by adding de `ignored_index` =  `<PAD>`.
 
 ### Overfitting but low accuracy
 
-The solution of the previous issues, lead to another problem. The model was overfitting because the training loss was converging to zero (whereas the validation loss was increasing) but the accuracy was not increasing:
+The solution of the previous issues, guided us to another problem. The model was overfitted because the training loss was converging to zero (whereas the validation loss was increasing) but the accuracy was not increasing:
 
 Accuracy train | Accuracy eval
 :---:|:---:
