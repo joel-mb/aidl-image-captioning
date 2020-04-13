@@ -50,6 +50,9 @@ class Train(object):
         logging.info('Building transforms...')
         train_transforms = torchvision.transforms.Compose([
             torchvision.transforms.RandomResizedCrop(224),
+            #torchvision.transforms.Resize(256),
+            #torchvision.transforms.CenterCrop(224),
+            #torchvision.transforms.Resize(224),
             torchvision.transforms.RandomHorizontalFlip(),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
@@ -58,6 +61,7 @@ class Train(object):
         val_transforms = torchvision.transforms.Compose([
             torchvision.transforms.Resize(256),
             torchvision.transforms.CenterCrop(224),
+            #torchvision.transforms.Resize(224),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
         ])
@@ -107,7 +111,7 @@ class Train(object):
         # ------------------
         # Loss and optimizer
         # ------------------
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(ignore_index=vocabulary.SpecialToken.PAD.value.index)
 
         # Only the parameters of the final encoder layer are being optimized.
         params = self.model.trainable_parameters()
@@ -202,17 +206,17 @@ class Train(object):
             # 5. Computing loss and accuracy.
             _, predicted_caps = out.max(2)  # predicted_caps = (batch_size, max_length)
             loss_value = loss.item()
-            acc_value = self._compute_accuracy(train_caps, predicted_caps)
+            acc_value = self._compute_accuracy(predicted_caps, loss_caps)
 
             if self.args.log_interval > 0 and i % self.args.log_interval == 0:
                 print('Epoch [{}/{}] - [{}/{}] [TRAIN] Loss: {} | Acc: {}'.format(
                     epoch + 1, self.args.num_epochs, i + 1, len(self.train_loader), loss_value,
                     acc_value))
 
-                # Writing scalars to tensorboard.
-                step = epoch * (len(self.train_loader)) + i
-                self.writer.add_scalar('Loss/train', loss_value, step)
-                self.writer.add_scalar('Accuracy/train', acc_value, step)
+                # # Writing scalars to tensorboard.
+                # step = epoch * (len(self.train_loader)) + i
+                # self.writer.add_scalar('Loss/train', loss_value, step)
+                # self.writer.add_scalar('Accuracy/train', acc_value, step)
 
             # Adding loss and accuracy to totals.
             total_loss += loss_value
@@ -247,17 +251,17 @@ class Train(object):
                 # 3. Computing loss and accuracy.
                 _, predicted_caps = out.max(2)  # predicted_caps = (batch_size, max_length)
                 loss_value = loss.item()
-                acc_value = self._compute_accuracy(train_caps, predicted_caps)
+                acc_value = self._compute_accuracy(predicted_caps, loss_caps)
 
                 if self.args.log_interval > 0 and i % self.args.log_interval == 0:
                     print('Epoch [{}/{}] - [{}/{}] [EVAL] Loss: {} | Acc: {}'.format(
                         epoch + 1, self.args.num_epochs, i + 1, len(self.val_loader), loss_value,
                         acc_value))
 
-                    # Writing scalars to tensorboard.
-                    step = epoch * (len(self.val_loader)) + i
-                    self.writer.add_scalar('Loss/eval', loss_value, step)
-                    self.writer.add_scalar('Accuracy/eval', acc_value, step)
+                    # # Writing scalars to tensorboard.
+                    # step = epoch * (len(self.val_loader)) + i
+                    # self.writer.add_scalar('Loss/eval', loss_value, step)
+                    # self.writer.add_scalar('Accuracy/eval', acc_value, step)
 
                 # Adding loss and accuracy to totals.
                 total_loss += loss_value
@@ -282,6 +286,12 @@ class Train(object):
 
             train_loss, train_acc = self._train_epoch(epoch)
             eval_loss, eval_acc = self._validate_epoch(epoch)
+
+            # Log loss and accuracy
+            self.writer.add_scalar('Loss/eval', eval_loss, epoch + 1)
+            self.writer.add_scalar('Loss/train', train_loss, epoch + 1)
+            self.writer.add_scalar('Accuracy/eval', eval_acc, epoch + 1)
+            self.writer.add_scalar('Accuracy/train', train_acc, epoch + 1)
 
             # Save checkpoint of the model.
             if self.args.save_checkpoints:

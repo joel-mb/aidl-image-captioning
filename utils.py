@@ -25,6 +25,10 @@ class IdxToWord(object):
 
         special_tokens = [token.value.word for token in SpecialToken]
         for idx in idx_sequence:
+            # Stop if we arrive to the <END> token.
+            if idx == SpecialToken.END.value.index:
+                break
+
             word = self._vocab.get_word(idx)
             if word not in special_tokens or word == SpecialToken.UNK.value.word:
                 result.append(word)
