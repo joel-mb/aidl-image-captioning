@@ -50,9 +50,6 @@ class Train(object):
         logging.info('Building transforms...')
         train_transforms = torchvision.transforms.Compose([
             torchvision.transforms.RandomResizedCrop(224),
-            #torchvision.transforms.Resize(256),
-            #torchvision.transforms.CenterCrop(224),
-            #torchvision.transforms.Resize(224),
             torchvision.transforms.RandomHorizontalFlip(),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
@@ -61,7 +58,6 @@ class Train(object):
         val_transforms = torchvision.transforms.Compose([
             torchvision.transforms.Resize(256),
             torchvision.transforms.CenterCrop(224),
-            #torchvision.transforms.Resize(224),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
         ])
