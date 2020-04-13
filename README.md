@@ -1,5 +1,7 @@
 # [aidl] Image Captioning
 
+[Documentation](docs/docs.md)
+
 ## Installation
 
 ```sh
