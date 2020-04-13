@@ -76,10 +76,9 @@ It's also important to not expect the model to predict captions with words it ha
   <img src="imgs/dataset/vocabulary4.png">
 </p>
 
-## Ingestion pipeline
+### Images
 
-* **Dimensions of the data**
-In our datasets (Training, Validation and test) we have 8091 images and the most common sizes are:
+In our datasets (training, validation and test) we have 8091 images and the most common sizes are:
 
 | Num. Images | Height | Width |
 |:---:|:---:|:---:|
@@ -90,7 +89,7 @@ In our datasets (Training, Validation and test) we have 8091 images and the most
 
 the rest of the images have slight variations of these.
 
-* **Tensor representation**
+## Ingestion pipeline
 
 As we are doing transfer learning we have to adapt the size of the images to the ones the encoders expect, as they are trained using the ImageNet dataset ResNet101 and SeNet154 expect:
 
@@ -98,20 +97,12 @@ As we are doing transfer learning we have to adapt the size of the images to the
 | ------ | ----- |
 |   224  |  224  |
 
-* **Data augmentation to avoid overfitting (regularization)**
+* **Data augmentation**
 
-
-From the beginning instead of feeding the data straight as it is in Flickr8k we did data augmentation by applying 
-
-In this project, the images must be transformated into tensors in order to process the inputs.  Finally, we decided to use data augmentation in the pipeline 
-
-| Batch_size | Height | Width | Channels |
-| --- | --- | --- | --- |
-| 32 (default) | 224 | 224 | 3
+From the beginning instead of feeding the data straight as it is in Flickr8k we did data augmentation by applying the folowing transformations:
 
 **Data Augmentation Pipeline**
 ![](https://i.imgur.com/EdXev5z.png)
-
 
 ## Model architecture
 
