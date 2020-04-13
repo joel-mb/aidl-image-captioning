@@ -24,10 +24,10 @@ The dataset is been splitted into three parts. The trainset to actualize the wei
 Example showing an image and its captions:
 
 <p align="center">
-  <img src="imgs/sample.jpg">
+  <img src="imgs/dataset/sample.jpg">
 </p>
 
-| Image | Capion |
+| Image | Caption |
 | --- | --- |
 44856031_0d82c2c7d1.jpg#0 | A brown dog is sprayed with water .
 44856031_0d82c2c7d1.jpg#1 | A dog is being squirted with water in the face outdoors .
@@ -44,20 +44,20 @@ Example showing an image and its captions:
 It is important to asses the model with the same vocabulary distribution as the one it has been trained for, we can see the most frequent words are the same in both datasets
 
 <p align="center">
-  <img src="imgs/vocabulary1.png">
-  <img src="imgs/vocabulary2.png">
+  <img src="imgs/dataset/vocabulary1.png">
+  <img src="imgs/dataset/vocabulary2.png">
 </p>
 
 We can do a similar assessment with the distribution of the caption lengths. We can see that they look alike.
 
 <p align="center">
-  <img src="imgs/vocabulary3.png">
+  <img src="imgs/dataset/vocabulary3.png">
 </p>
 
 It's also important to not expect the model to predict captions with words it hasn't seen before. Those are the most frequent words on the test set that are not in the trainset.
 
 <p align="center">
-  <img src="imgs/vocabulary4.png">
+  <img src="imgs/dataset/vocabulary4.png">
 </p>
 
 ## Ingestion pipeline
@@ -76,12 +76,12 @@ The decoder is composed of a Recurrent Neural Network (RNN) as we are dealing wi
 
 Depending on the decoder, we differentiate two different model architectures: (1) the baseline model and (2) the attention model. Both models are explained more into detail in the following sections.
 
-### 4.1 Baseline model
+### Baseline model
 This model uses a vanilla LSTM as decoder and the last layer of the encoder inputs the first LSTM iteration as the context vector.
 
 The next picture summarizes the architecture of this model:
 
-![baseline_model](imgs/baseline_model.svg)
+![baseline_model](imgs/models/baseline_model.svg)
 
 We use two different methods depending on if we are on training or inference time:
 
@@ -98,7 +98,7 @@ The output of the attention is a conext vector as a weighted sum of the features
 
 The overall architecture of this model is shown in the next figure. It should be taken into account that the input of each LSTM cell is the concatenation of the embedding and the context vector computed by the attention block.
 
-![attention_model](imgs/attention_model.svg)
+![attention_model](imgs/models/attention_model.svg)
 
 Similarly to the model explained above, we use teacher forcing while training.
 
@@ -106,9 +106,68 @@ Similarly to the model explained above, we use teacher forcing while training.
 
 TODO
 
+## Problems
+
+### The models is always predicting `<START>`
+
+This issue comes up due to two factors:
+
+* We use teacher forcing when training and validating.
+* We were using the same transformed caption for training and computing the loss.
+
+Our initial target caption had the following form: ['`<START>`', 'A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water', '`<END>`']
+
+As we were using the same tokenized sequence to compute the loss an train, the model was learning to always predict the input word.
+
+Therefore, while training, the model seemed to learn but at inference time, the model was predicting a sequence of `<START>` words because the first input to the model was the <START> word.
+
+This issue was solved by applying a shift and using two different captions:
+
+* The source caption used for training without the `<END>` token:  ['`<START>`', 'A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water']
+
+* The target caption used to compute the loss without the `<START>` token:  ['A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water']
+
+
+### No overfitting whithout attention
+
+While doing overfitting without attention, the loss was not converging to zero:
+
+Accuracy train | Accuracy eval
+:---:|:---:
+ <img src="imgs/issues/Accuracy_train_ignore_index_issue.svg" width=1000 />  |  <img src="imgs/issues/Accuracy_eval_ignore_index_issue.svg" width=1000 /> 
+
+Loss train | Loss eval
+:---: | :---:
+<img src="imgs/issues/Loss_train_ignore_index_issue.svg" width=1000> |  <img src="imgs/issues/Loss_eval_ignore_index_issue.svg" width=1000>
+
+This issues was due to we were taking into account the `<PAD>` when computing the loss and that part of the loss was constant. The issue was solved by adding de `ignored_index` =  `<PAD>`.
+
+### Overfitting but low accuracy
+
+The solution of the previous issues, lead to another problem. The model was overfitting because the training loss was converging to zero (whereas the validation loss was increasing) but the accuracy was not increasing:
+
+Accuracy train | Accuracy eval
+:---:|:---:
+ <img src="imgs/issues/Accuracy_train_accuracy_issue.svg" width=1000 />  |  <img src="imgs/issues/Accuracy_eval_accuracy_issue.svg" width=1000 /> 
+
+Loss train | Loss eval
+:---: | :---:
+<img src="imgs/issues/Loss_train_accuracy_issue.svg" width=1000> |  <img src="imgs/issues/Loss_eval_accuracy_issue.svg" width=1000>
+
+The issue came up because we were taking into account the words predicted after the <`END`> and therefore there was a penalty when computing the BLEU.
+
 ## Results
 
 ### Overfitting
+
+Accuracy train | Accuracy eval
+:---:|:---:
+ <img src="imgs/results/Accuracy_train_overfitting.svg" width=1000 />  |  <img src="imgs/results/Accuracy_eval_overfitting.svg" width=1000 /> 
+
+Loss train | Loss eval
+:---: | :---:
+<img src="imgs/results/Loss_train_overfitting.svg" width=1000> |  <img src="imgs/results/Loss_eval_overfitting.svg" width=1000>
+
 We use a reduced dataset in order to perform overfitting to the models explained above. The following table summarizes the number of pictures contained in each split:
 
 | Train | Validation | Test |
@@ -117,7 +176,7 @@ We use a reduced dataset in order to perform overfitting to the models explained
 
 On the other hand, the next table depicts the selected parameters for the models:
 
-| Parameter | value |
+| Parameter | Value |
 | --- | --- |
 | num-epochs | 300 |
 | batch-size | 15 |
@@ -133,16 +192,15 @@ On the other hand, the next table depicts the selected parameters for the models
 
 Accuracy train | Accuracy eval
 :---:|:---:
- <img src="imgs/Accuracy_train.svg" width=1000 />  |  <img src="imgs/Accuracy_eval.svg" width=1000 /> 
-
+ <img src="imgs/results/Accuracy_train.svg" width=1000 />  |  <img src="imgs/results/Accuracy_eval.svg" width=1000 /> 
 
 Loss train | Loss eval
 :---: | :---:
-<img src="imgs/Loss_train.svg" width=1000> |  <img src="imgs/Loss_eval.svg" width=1000>
+<img src="imgs/results/Loss_train.svg" width=1000> |  <img src="imgs/results/Loss_eval.svg" width=1000>
 
 In this section, we use the entire dataset with the following parameters:
 
-| Parameter | value |
+| Parameter | Value |
 | --- | --- |
 | num-epochs | 20 |
 | batch-size | 32 |
@@ -155,7 +213,8 @@ In this section, we use the entire dataset with the following parameters:
 | attention-size | 64 |
 
 ## Examples
-![motorbike](imgs/bike_captioning.png)
+
+![motorbike](imgs/examples/motorbike_attention.png)
 
 
 ## Conclusions and next steps
