@@ -1,7 +1,14 @@
 # Image Captioning
 
+The README contains the documentation of the final deep learning project for AIDL postgraduate at UPC.
+
+The main goal is to build an image captioning model from scratch using the Pytorch framework to build deep  learning models.
+
+So the model has an image as an input and has to predict a caption that describes the content of the image.
+
 ## Index
 
+* [Motivation](#motivation)
 * [Dataset](#dataset)
 * [Ingestion pipeline](#ingestion-pipeline)
 * [Model architecture](#model-architecture)
@@ -11,15 +18,24 @@
 
 ---
 
+## Motivation
+
+**Personal Motivation**
+The main goal is to learn deep learning in a practical way through and image captioning model. We decide to do this because:
+* This model uses image analysis (CNN) and natural language processing (RNN) nets, both studied in the course.
+* Possibility to enhance the baseline model with several modifications.
+    
+**Applications:**
+In the real life, the are a lot of applications for the image captioning. Some of the most important are:
+* Medical Diagnosys
+* Help blind people
+* Better searches on Internet
+
 ## Dataset
 
 The dataset used to build the model is [Flickr8k](http://academictorrents.com/details/9dea07ba660a722ae1008c4c8afdd303b6f6e53b). It contains 8.000 images with five captions each. At the moment there are bigger datasets available, but the intention from the beginning was to test different ideas, so a small dataset has helped us to iterate fast.
 
-The dataset is been splitted into three parts. The trainset to actualize the weights, 6000 images. The validation set to determine when the model has learned and the testset with 1000 images to asses the performance, computing the BLEU metric. 
-
-| Train | Validation | Test |
-| --- | --- | --- |
-| 6000 Photos | 1000 Photos | 1000 Photos |
+The dataset is been splitted into three parts. The trainset to actualize the weights, 6000 images. The validation set to determine when the model has learned and the testset with 1000 images to asses the performance, computing the BLEU metric.
 
 Example showing an image and its captions:
 
@@ -62,7 +78,40 @@ It's also important to not expect the model to predict captions with words it ha
 
 ## Ingestion pipeline
 
-TODO
+* **Dimensions of the data**
+In our datasets (Training, Validation and test) we have 8091 images and the most common sizes are:
+
+| Num. Images | Height | Width |
+|:---:|:---:|:---:|
+|    1523     |  333   |  500  |
+|    1299     |  375   |  500  |
+|     659     |  500   |  333  |
+|     427     |  500   |  375  |
+
+the rest of the images have slight variations of these.
+
+* **Tensor representation**
+
+As we are doing transfer learning we have to adapt the size of the images to the ones the encoders expect, as they are trained using the ImageNet dataset ResNet101 and SeNet154 expect:
+
+| Height | Width |
+| ------ | ----- |
+|   224  |  224  |
+
+* **Data augmentation to avoid overfitting (regularization)**
+
+
+From the beginning instead of feeding the data straight as it is in Flickr8k we did data augmentation by applying 
+
+In this project, the images must be transformated into tensors in order to process the inputs.  Finally, we decided to use data augmentation in the pipeline 
+
+| Batch_size | Height | Width | Channels |
+| --- | --- | --- | --- |
+| 32 (default) | 224 | 224 | 3
+
+**Data Augmentation Pipeline**
+![](https://i.imgur.com/EdXev5z.png)
+
 
 ## Model architecture
 
@@ -81,7 +130,7 @@ This model uses a vanilla LSTM as decoder and the last layer of the encoder inpu
 
 The next picture summarizes the architecture of this model:
 
-![baseline_model](imgs/models/baseline_model.svg)
+<img src="imgs/models/baseline_model.svg">
 
 We use two different methods depending on if we are on training or inference time:
 
@@ -98,7 +147,7 @@ The output of the attention is a conext vector as a weighted sum of the features
 
 The overall architecture of this model is shown in the next figure. It should be taken into account that the input of each LSTM cell is the concatenation of the embedding and the context vector computed by the attention block.
 
-![attention_model](imgs/models/attention_model.svg)
+<img src="imgs/models/attention_model.svg">
 
 Similarly to the model explained above, we use teacher forcing while training.
 
