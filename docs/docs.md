@@ -14,6 +14,8 @@ So the model has an image as an input and has to predict a caption that describe
 * [Model architecture](#model-architecture)
 * [Implementation](#implementation)
 * [Results](#results)
+* [Examples](#examples)
+* [Difficulties](#difficulties)
 * [Conclusions and next steps](#conclusions-and-next-steps)
 
 ---
@@ -33,7 +35,7 @@ In the real life, the are a lot of applications for the image captioning. Some o
 
 ## Dataset
 
-The dataset used to build the model is [Flickr8k](http://academictorrents.com/details/9dea07ba660a722ae1008c4c8afdd303b6f6e53b). It contains 8.000 images with five captions each. At the moment there are bigger datasets available, but the intention from the beginning was to test different ideas, so a small dataset has helped us to iterate fast.
+The dataset used to build the model is Flickr8k. It contains 8.000 images with five captions each. At the moment there are bigger datasets available, but the intention from the beginning was to test different ideas, so a small dataset has helped us to iterate fast.
 
 The dataset is been splitted into three parts. The trainset to actualize the weights, 6000 images. The validation set to determine when the model has learned and the testset with 1000 images to asses the performance, computing the BLEU metric.
 
@@ -97,11 +99,8 @@ As we are doing transfer learning we have to adapt the size of the images to the
 | ------ | ----- |
 |   224  |  224  |
 
-* **Data augmentation**
+Instead of feeding the data straight as it is in Flickr8k we did data augmentation by applying the folowing transformations:
 
-From the beginning instead of feeding the data straight as it is in Flickr8k we did data augmentation by applying the folowing transformations:
-
-**Data Augmentation Pipeline**
 ![](https://i.imgur.com/EdXev5z.png)
 
 ## Model architecture
@@ -121,7 +120,7 @@ This model uses a vanilla LSTM as decoder and the last layer of the encoder inpu
 
 The next picture summarizes the architecture of this model:
 
-<img src="imgs/models/baseline_model.svg">
+![attention_model](imgs/baseline_model.svg)
 
 We use two different methods depending on if we are on training or inference time:
 
@@ -138,64 +137,9 @@ The output of the attention is a conext vector as a weighted sum of the features
 
 The overall architecture of this model is shown in the next figure. It should be taken into account that the input of each LSTM cell is the concatenation of the embedding and the context vector computed by the attention block.
 
-<img src="imgs/models/attention_model.svg">
+![attention_model](imgs/attention_model.svg)
 
 Similarly to the model explained above, we use teacher forcing while training.
-
-## Implementation
-
-TODO
-
-## Difficulties
-
-### The model is always predicting `<START>`
-
-This issue came up due to two factors:
-
-* We used teacher forcing in validation.
-* We used the same transformed caption for both training and loss computation and as a consecuence we had problems with the special tokens.
-
-Example of an initial target caption:
-
-['`<START>`', 'A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water', '`<END>`']
-
-As we were using the same tokenized sequence to compute the loss and train, the model was learning to always predict the input word, therefore, while training, the model seemed to learn but at inference time, the model was predicting a sequence of `<START>` words because the first input to the model was the <START> word:
-
-<p align="center">
-  <img src="imgs/issues/start_issue.png">
-</p>
-
-This issue was solved by applying a shift and using two different captions:
-* The source caption used for training without the `<END>` token:  ['`<START>`', 'A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water']
-* The target caption used to compute the loss without the `<START>` token because we do not want to learn to produce the `<START>`:  ['A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water', `<END>`]
-
-### No overfitting without attention
-
-While doing overfitting without attention, the loss was not converging to zero while the accuracy in training was 100%:
-
-Accuracy train | Accuracy eval
-:---:|:---:
- <img src="imgs/issues/Accuracy_train_ignore_index_issue.svg" width=1000 />  |  <img src="imgs/issues/Accuracy_eval_ignore_index_issue.svg" width=1000 /> 
-
-Loss train | Loss eval
-:---: | :---:
-<img src="imgs/issues/Loss_train_ignore_index_issue.svg" width=1000> |  <img src="imgs/issues/Loss_eval_ignore_index_issue.svg" width=1000>
-
-This issue was due to we were taking into account the `<PAD>` token when computing the loss and that part of the loss was constant. The issue was solved by adding de `ignored_index` =  `<PAD>`.
-
-### Overfitting but low accuracy
-
-The solution of the previous issues, guided us to another problem. The model was overfitted because the training loss was converging to zero (whereas the validation loss was increasing) but the accuracy was not increasing:
-
-Accuracy train | Accuracy eval
-:---:|:---:
- <img src="imgs/issues/Accuracy_train_accuracy_issue.svg" width=1000 />  |  <img src="imgs/issues/Accuracy_eval_accuracy_issue.svg" width=1000 /> 
-
-Loss train | Loss eval
-:---: | :---:
-<img src="imgs/issues/Loss_train_accuracy_issue.svg" width=1000> |  <img src="imgs/issues/Loss_eval_accuracy_issue.svg" width=1000>
-
-The issue came up because we were taking into account the words predicted after the <`END`> and therefore there was a penalty when computing the BLEU.
 
 ## Results
 
@@ -255,8 +199,105 @@ In this section, we use the entire dataset with the following parameters:
 
 ## Examples
 
-![motorbike](imgs/examples/motorbike_attention.png)
+Used parameters:
 
+| Parameter | Value |
+| --- | --- |
+| num-epochs | 5 |
+| batch-size | 32 |
+| learning-rate | 1e-3 |
+| encoder-type | `resnet101` |
+| attention-type | `none`, `additive` |
+| encoder-size | 64 |
+| hidden-size | 256 |
+| embedding-size | 128 |
+| attention-size | 64 |
+
+### Example 1
+* Without attention
+![motorbike](imgs/examples/no_attention_dogs.png)
+
+* With attention
+![motorbike](imgs/examples/attention_dogs.png)
+
+### Example 2
+* Without attention
+![motorbike](imgs/examples/no_attention_moto.png)
+
+* With attention
+![motorbike](imgs/examples/attention_moto.png)
+
+### Example 3
+* Without attention
+![motorbike](imgs/examples/no_attention_football.png)
+
+* With attention
+![motorbike](imgs/examples/attention_football.png)
+
+### Example 4
+* Without attention
+![motorbike](imgs/examples/no_attention_random.png)
+
+* With attention
+![motorbike](imgs/examples/attention_random.png)
+
+### Example 5
+* Without attention
+![motorbike](imgs/examples/no_attention_batman.png)
+
+* With attention
+![motorbike](imgs/examples/attention_batman.png)
+
+## Difficulties
+
+### The model is always predicting `<START>`
+
+This issue came up due to two factors:
+
+* We used teacher forcing in validation.
+* We used the same transformed caption for both training and loss computation and as a consecuence we had problems with the special tokens.
+
+Example of an initial target caption:
+
+['`<START>`', 'A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water', '`<END>`']
+
+As we were using the same tokenized sequence to compute the loss and train, the model was learning to always predict the input word, therefore, while training, the model seemed to learn but at inference time, the model was predicting a sequence of `<START>` words because the first input to the model was the <START> word:
+
+<p align="center">
+  <img src="imgs/issues/start_issue.png">
+</p>
+
+This issue was solved by applying a shift and using two different captions:
+* The source caption used for training without the `<END>` token:  ['`<START>`', 'A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water']
+* The target caption used to compute the loss without the `<START>` token because we do not want to learn to produce the `<START>`:  ['A', 'brown', 'dog', 'is', 'sprayed', 'with', 'water', `<END>`]
+
+### No overfitting without attention
+
+While doing overfitting without attention, the loss was not converging to zero while the accuracy in training was 100%:
+
+Accuracy train | Accuracy eval
+:---:|:---:
+ <img src="imgs/issues/Accuracy_train_ignore_index_issue.svg" width=1000 />  |  <img src="imgs/issues/Accuracy_eval_ignore_index_issue.svg" width=1000 /> 
+
+Loss train | Loss eval
+:---: | :---:
+<img src="imgs/issues/Loss_train_ignore_index_issue.svg" width=1000> |  <img src="imgs/issues/Loss_eval_ignore_index_issue.svg" width=1000>
+
+This issue was due to we were taking into account the `<PAD>` token when computing the loss and that part of the loss was constant. The issue was solved by adding de `ignored_index` =  `<PAD>`.
+
+### Overfitting but low accuracy
+
+The solution of the previous issues, guided us to another problem. The model was overfitted because the training loss was converging to zero (whereas the validation loss was increasing) but the accuracy was not increasing:
+
+Accuracy train | Accuracy eval
+:---:|:---:
+ <img src="imgs/issues/Accuracy_train_accuracy_issue.svg" width=1000 />  |  <img src="imgs/issues/Accuracy_eval_accuracy_issue.svg" width=1000 /> 
+
+Loss train | Loss eval
+:---: | :---:
+<img src="imgs/issues/Loss_train_accuracy_issue.svg" width=1000> |  <img src="imgs/issues/Loss_eval_accuracy_issue.svg" width=1000>
+
+The issue came up because we were taking into account the words predicted after the <`END`> and therefore there was a penalty when computing the BLEU.
 
 ## Conclusions and next steps
 
@@ -270,4 +311,3 @@ In this section, we use the entire dataset with the following parameters:
 * Apply learning rate scheduler, checkpoints.
 * Fine tune encoder or build our own (big dataset needed).
 * Use pretrained word embeddings.
-* Specific field (e.g., cars, planes...).
