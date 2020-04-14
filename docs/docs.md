@@ -163,7 +163,7 @@ On the other hand, the next table depicts the selected parameters for the models
 
 | Parameter | Value |
 | --- | --- |
-| num-epochs | 300 |
+| num-epochs | 100 |
 | batch-size | 15 |
 | learning-rate | 1e-3 |
 | encoder-type | `resnet101`, `senet154` |
